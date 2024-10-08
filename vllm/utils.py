@@ -5,6 +5,7 @@ import datetime
 import enum
 import gc
 import inspect
+import ipaddress
 import os
 import random
 import socket
@@ -117,6 +118,9 @@ STR_ROCM_FLASH_ATTN_VAL: str = "ROCM_FLASH"
 STR_XFORMERS_ATTN_VAL: str = "XFORMERS"
 STR_FLASH_ATTN_VAL: str = "FLASH_ATTN"
 STR_INVALID_VAL: str = "INVALID"
+
+GB_bytes = 1_000_000_000
+"""The number of bytes in one gigabyte (GB)."""
 
 GiB_bytes = 1 << 30
 """The number of bytes in one gibibyte (GiB)."""
@@ -500,6 +504,15 @@ async def merge_async_iterators(
                 await it.aclose()
 
 
+async def collect_from_async_generator(
+        iterator: AsyncGenerator[T, None]) -> List[T]:
+    """Collect all items from an async generator into a list."""
+    items = []
+    async for item in iterator:
+        items.append(item)
+    return items
+
+
 def get_ip() -> str:
     host_ip = envs.VLLM_HOST_IP
     if host_ip:
@@ -531,6 +544,14 @@ def get_ip() -> str:
         " VLLM_HOST_IP or HOST_IP.",
         stacklevel=2)
     return "0.0.0.0"
+
+
+def is_valid_ipv6_address(address: str) -> bool:
+    try:
+        ipaddress.IPv6Address(address)
+        return True
+    except ValueError:
+        return False
 
 
 def get_distributed_init_method(ip: str, port: int) -> str:
@@ -735,7 +756,8 @@ def create_kv_caches_with_random(
 
 @lru_cache
 def print_warning_once(msg: str) -> None:
-    logger.warning(msg)
+    # Set the stacklevel to 2 to print the caller's line info
+    logger.warning(msg, stacklevel=2)
 
 
 @lru_cache(maxsize=None)
@@ -1081,6 +1103,13 @@ def cuda_device_count_stateless() -> int:
     return _cuda_device_count_stateless(envs.CUDA_VISIBLE_DEVICES)
 
 
+def cuda_is_initialized() -> bool:
+    """Check if CUDA is initialized."""
+    if not torch.cuda._is_compiled():
+        return False
+    return torch.cuda.is_initialized()
+
+
 def weak_bind(bound_method: Callable[..., Any], ) -> Callable[..., None]:
     """Make an instance method that weakly references
     its associated instance and no-ops once that
@@ -1181,11 +1210,21 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
         config_args = FlexibleArgumentParser._load_config_file(file_path)
 
         # 0th index is for {serve,chat,complete}
+        # followed by model_tag (only for serve)
         # followed by config args
         # followed by rest of cli args.
         # maintaining this order will enforce the precedence
         # of cli > config > defaults
-        args = [args[0]] + config_args + args[1:index] + args[index + 2:]
+        if args[0] == "serve":
+            if index == 1:
+                raise ValueError(
+                    "No model_tag specified! Please check your command-line"
+                    " arguments.")
+            args = [args[0]] + [
+                args[1]
+            ] + config_args + args[2:index] + args[index + 2:]
+        else:
+            args = [args[0]] + config_args + args[1:index] + args[index + 2:]
 
         return args
 
@@ -1236,6 +1275,15 @@ async def _run_task_with_lock(task: Callable, lock: asyncio.Lock, *args,
     """Utility function to run async task in a lock"""
     async with lock:
         return await task(*args, **kwargs)
+
+
+def supports_kw(callable: Callable[..., object], kw_name: str) -> bool:
+    params = inspect.signature(callable).parameters
+    if kw_name in params:
+        return True
+
+    return any(param.kind == inspect.Parameter.VAR_KEYWORD
+               for param in params.values())
 
 
 def get_allowed_kwarg_only_overrides(

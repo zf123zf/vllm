@@ -22,7 +22,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Inference-only Qwen2 model compatible with HuggingFace weights."""
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -37,8 +37,7 @@ from vllm.model_executor.layers.linear import (MergedColumnParallelLinear,
                                                QKVParallelLinear,
                                                RowParallelLinear)
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
-from vllm.model_executor.layers.quantization.base_config import (
-    QuantizationConfig)
+from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.sampler import Sampler, SamplerOutput
 from vllm.model_executor.layers.vocab_parallel_embedding import (
@@ -48,8 +47,10 @@ from vllm.model_executor.model_loader.weight_utils import (
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
-from .interfaces import SupportsLoRA
-from .utils import is_pp_missing_parameter, make_layers
+from .interfaces import SupportsLoRA, SupportsPP
+from .utils import (PPMissingLayer, group_weights_with_prefix,
+                    is_pp_missing_parameter,
+                    make_empty_intermediate_tensors_factory, make_layers)
 
 
 class Qwen2MLP(nn.Module):
@@ -235,11 +236,16 @@ class Qwen2Model(nn.Module):
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
-        self.embed_tokens = VocabParallelEmbedding(
-            config.vocab_size,
-            config.hidden_size,
-            quant_config=quant_config,
-        )
+        if get_pp_group().is_first_rank or (config.tie_word_embeddings
+                                            and get_pp_group().is_last_rank):
+            self.embed_tokens = VocabParallelEmbedding(
+                config.vocab_size,
+                config.hidden_size,
+                quant_config=quant_config,
+            )
+        else:
+            self.embed_tokens = PPMissingLayer()
+
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
             lambda prefix: Qwen2DecoderLayer(config=config,
@@ -248,7 +254,13 @@ class Qwen2Model(nn.Module):
             prefix=f"{prefix}.layers",
         )
 
-        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.make_empty_intermediate_tensors = (
+            make_empty_intermediate_tensors_factory(
+                ["hidden_states", "residual"], config.hidden_size))
+        if get_pp_group().is_last_rank:
+            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        else:
+            self.norm = PPMissingLayer()
 
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.embed_tokens(input_ids)
@@ -261,7 +273,7 @@ class Qwen2Model(nn.Module):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    ) -> Union[torch.Tensor, IntermediateTensors]:
         if get_pp_group().is_first_rank:
             if inputs_embeds is not None:
                 hidden_states = inputs_embeds
@@ -289,8 +301,49 @@ class Qwen2Model(nn.Module):
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
 
+    def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("gate_up_proj", "gate_proj", 0),
+            ("gate_up_proj", "up_proj", 1),
+        ]
+        params_dict = dict(self.named_parameters(remove_duplicate=False))
+        for name, loaded_weight in weights:
+            if "rotary_emb.inv_freq" in name:
+                continue
+            for (param_name, weight_name, shard_id) in stacked_params_mapping:
+                if weight_name not in name:
+                    continue
+                name = name.replace(weight_name, param_name)
+                # Skip loading extra bias for GPTQ models.
+                if name.endswith(".bias") and name not in params_dict:
+                    continue
+                if is_pp_missing_parameter(name, self):
+                    continue
+                param = params_dict[name]
+                weight_loader = param.weight_loader
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                # Skip loading extra bias for GPTQ models.
+                if name.endswith(".bias") and name not in params_dict:
+                    continue
+                # Remapping the name of FP8 kv-scale.
+                name = maybe_remap_kv_scale_name(name, params_dict)
+                if name is None:
+                    continue
+                if is_pp_missing_parameter(name, self):
+                    continue
+                param = params_dict[name]
+                weight_loader = getattr(param, "weight_loader",
+                                        default_weight_loader)
+                weight_loader(param, loaded_weight)
 
-class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
+
+class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -350,43 +403,8 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
 
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.sampler = Sampler()
-        # Qwen2ForCausalLM config Qwen2Config {
-        #   "_name_or_path": "/workspace/models/qwen/Qwen2-Math-1_5B",
-        #   "architectures": [
-        #     "Qwen2ForCausalLM"
-        #   ],
-        #   "attention_dropout": 0.0,
-        #   "bos_token_id": 151643,
-        #   "eos_token_id": 151643,
-        #   "hidden_act": "silu",
-        #   "hidden_size": 1536,
-        #   "initializer_range": 0.02,
-        #   "intermediate_size": 8960,
-        #   "max_position_embeddings": 4096,
-        #   "max_window_layers": 21,
-        #   "model_type": "qwen2",
-        #   "num_attention_heads": 12,
-        #   "num_hidden_layers": 28,
-        #   "num_key_value_heads": 2,
-        #   "rms_norm_eps": 1e-06,
-        #   "rope_theta": 10000,
-        #   "sliding_window": null,
-        #   "tie_word_embeddings": true,
-        #   "torch_dtype": "bfloat16",
-        #   "transformers_version": "4.44.2",
-        #   "use_cache": true,
-        #   "use_mrope": false,
-        #   "use_sliding_window": false,
-        #   "vocab_size": 151936
-        # }
-        # Qwen2ForCausalLM lora_config None
-        # Qwen2ForCausalLM quant_config None
-        # Qwen2ForCausalLM tie_word_embeddings True
-
-        print("Qwen2ForCausalLM config", config)
-        print("Qwen2ForCausalLM lora_config", lora_config)
-        print("Qwen2ForCausalLM quant_config", quant_config)
-        print("Qwen2ForCausalLM tie_word_embeddings", config.tie_word_embeddings)
+        self.make_empty_intermediate_tensors = (
+            self.model.make_empty_intermediate_tensors)
 
     def forward(
         self,
@@ -395,17 +413,7 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
-    ) -> torch.Tensor:
-        
-        # 被调用者的信息
-        # import inspect
-        # print("Qwen2ForCausalLM forward from----")
-        # for i in inspect.stack():
-        #     print(i)
-        # print(inspect.stack()[1].function)
-        # print(inspect.stack()[1].filename)
-        # print(inspect.stack()[1].lineno)
-                
+    ) -> Union[torch.Tensor, IntermediateTensors]:
         print("Qwen2ForCausalLM step forward----")
         print("Qwen2ForCausalLM-forward input_ids", input_ids.shape) # 256
         print("Qwen2ForCausalLM-forward positions", positions.shape)
@@ -432,21 +440,6 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         print("Qwen2ForCausalLM-compute_logits logits", logits.shape)
         return logits
 
-    def make_empty_intermediate_tensors(
-            self, batch_size: int, dtype: torch.dtype,
-            device: torch.device) -> IntermediateTensors:
-        print("Qwen2ForCausalLM step make_empty_intermediate_tensors----")
-        return IntermediateTensors({
-            "hidden_states":
-            torch.zeros((batch_size, self.config.hidden_size),
-                        dtype=dtype,
-                        device=device),
-            "residual":
-            torch.zeros((batch_size, self.config.hidden_size),
-                        dtype=dtype,
-                        device=device),
-        })
-
     def sample(
         self,
         logits: torch.Tensor,
@@ -460,46 +453,17 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
-        print("Qwen2ForCausalLM step load_weights----")
-        stacked_params_mapping = [
-            # (param_name, shard_name, shard_id)
-            ("qkv_proj", "q_proj", "q"),
-            ("qkv_proj", "k_proj", "k"),
-            ("qkv_proj", "v_proj", "v"),
-            ("gate_up_proj", "gate_proj", 0),
-            ("gate_up_proj", "up_proj", 1),
-        ]
-        params_dict = dict(self.named_parameters(remove_duplicate=False))
-        for name, loaded_weight in weights:
-            if "rotary_emb.inv_freq" in name:
-                continue
-            if self.config.tie_word_embeddings and "lm_head.weight" in name:
-                continue
-            for (param_name, weight_name, shard_id) in stacked_params_mapping:
-                if weight_name not in name:
+        weights_group = group_weights_with_prefix(weights)
+
+        self.model.load_weights(weights_group["model"])
+
+        if not self.config.tie_word_embeddings:
+            lm_head_dict = dict(self.lm_head.named_parameters())
+            for name, loaded_weight in weights_group["lm_head"]:
+                if is_pp_missing_parameter(name, self.lm_head):
                     continue
-                name = name.replace(weight_name, param_name)
-                # Skip loading extra bias for GPTQ models.
-                if name.endswith(".bias") and name not in params_dict:
-                    continue
-                if is_pp_missing_parameter(name, self):
-                    continue
-                param = params_dict[name]
-                weight_loader = param.weight_loader
-                # print("---weight_loader", name, weight_loader)
-                weight_loader(param, loaded_weight, shard_id)
-                break
-            else:
-                # Skip loading extra bias for GPTQ models.
-                if name.endswith(".bias") and name not in params_dict:
-                    continue
-                # Remapping the name of FP8 kv-scale.
-                name = maybe_remap_kv_scale_name(name, params_dict)
-                if name is None:
-                    continue
-                if is_pp_missing_parameter(name, self):
-                    continue
-                param = params_dict[name]
+
+                param = lm_head_dict[name]
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
