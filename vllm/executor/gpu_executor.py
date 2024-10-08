@@ -127,7 +127,15 @@ class GPUExecutor(ExecutorBase):
     def execute_model(
         self, execute_model_req: ExecuteModelRequest
     ) -> Optional[List[Union[SamplerOutput, PoolerOutput]]]:
+        
+        # GPUExecutor output [SamplerOutput(outputs=[CompletionSequenceGroupOutput(samples=[SequenceOutput(parent_seq_id=0, output_token=24, logprobs={24: Logprob(logprob=inf, rank=None, decoded_token=None)})], prompt_logprobs=None)], sampled_token_probs=None, sampled_token_ids=None, spec_decode_worker_metrics=None)]
+        # GPUExecutor driver_worker <vllm.worker.worker.Worker object at 0x7f1265104e20>
+        # GPUExecutor execute_model_req ExecuteModelRequest(seq_group_metadata_list=[SequenceGroupMetadata(request_id='chat-2054455c0c964d15baceb49a0bf8fe3b', is_prompt=False, seq_data={0: SequenceData(prompt_token_ids=array('l', [151644, 8948, 198, 2610, 525, 264, 10950, 17847, 151645, 198, 151644, 872, 198, 102261, 102261, 99565, 99593, 101602, 18830, 24, 24, 18538, 3837, 102336, 24, 15, 18538, 3837, 99517, 97706, 100124, 100430, 18538, 80443, 50930, 11319, 151645, 198, 151644, 77091, 198]), output_token_ids=(102261, 102261, 97706, 100124, 24), cumulative_logprob=inf, get_num_computed_tokens=45}, sampling_params=SamplingParams(n=1, best_of=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.0, temperature=0.7, top_p=1.0, top_k=-1, min_p=0.0, seed=None, use_beam_search=False, length_penalty=1.0, early_stopping=False, stop=[], stop_token_ids=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=87, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, truncate_prompt_tokens=None), block_tables={0: [119075, 119074, 119073]}, do_sample=True, pooling_params=None, lora_request=None, computed_block_nums=[], state=SequenceGroupState(num_steps=1, current_step=0), multi_modal_data=None, encoder_seq_data=None, cross_block_table=None, prompt_adapter_request=None, token_chunk_size=1, num_speculative_tokens=None)], blocks_to_swap_in=[], blocks_to_swap_out=[], blocks_to_copy=[], virtual_engine=0, num_lookahead_slots=0, running_queue_size=1, previous_hidden_states=None, num_steps=1, finished_requests_ids=[], last_sampled_token_ids=None, async_callback=functools.partial(<function weak_bind.<locals>.weak_bound at 0x7f1261e80940>, ctx=<vllm.engine.llm_engine.SchedulerContext object at 0x7f1264f00100>))
+                                                        
+        print("GPUExecutor driver_worker", self.driver_worker)
+        print("GPUExecutor execute_model_req", execute_model_req)
         output = self.driver_worker.execute_model(execute_model_req)
+        print("GPUExecutor output", output)
         return output
 
     def add_lora(self, lora_request: LoRARequest) -> bool:

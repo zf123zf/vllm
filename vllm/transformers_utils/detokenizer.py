@@ -133,15 +133,22 @@ class Detokenizer:
 
         # Decode logprobs
         logprobs = seq.output_logprobs[-1]
+        print("decode_sequence_inplace logprobs", logprobs, token_id_generated_this_iteration, new_decoded_token_text, all_input_ids)
+        
         if logprobs:
             previous_tokens = all_input_ids[:-1]
             for token_id, sample_logprob in logprobs.items():
+                if token_id == 151666:
+                    print("decode_sequence_inplace change 1", new_decoded_token_text, logprobs[151666].decoded_token)
+                    new_decoded_token_text = logprobs[151666].decoded_token
+                    print("decode_sequence_inplace change 2", new_decoded_token_text)
                 # If the token was generated this iteration,
                 # use the provided text.
                 if token_id == token_id_generated_this_iteration:
                     sample_logprob.decoded_token = new_decoded_token_text
                     continue
 
+                print("decode_sequence_inplace sample_logprob.decoded_token", sample_logprob.decoded_token, token_id)
                 if (sample_logprob.decoded_token is None
                         and token_id != INVALID_TOKEN_ID):
                     all_input_ids_with_logprob = previous_tokens + [token_id]
@@ -156,6 +163,7 @@ class Detokenizer:
                         spaces_between_special_tokens,
                     )
                     sample_logprob.decoded_token = new_text
+                    print("decode_sequence_inplace new_text", new_text)
 
         seq.tokens.extend(new_tokens)
         seq.prefix_offset = prefix_offset
@@ -270,6 +278,13 @@ def detokenize_incrementally(
         spaces_between_special_tokens: Whether to add spaces between special
             tokens.
     """
+    print("detokenize_incrementally req tokenizer", tokenizer)
+    print("detokenize_incrementally req all_input_ids", len(all_input_ids), all_input_ids)
+    print("detokenize_incrementally req prev_tokens", prev_tokens)
+    print("detokenize_incrementally req prefix_offset", prefix_offset)
+    print("detokenize_incrementally req read_offset", read_offset)
+    print("detokenize_incrementally req skip_special_tokens", skip_special_tokens)
+    print("detokenize_incrementally req spaces_between_special_tokens", spaces_between_special_tokens)
     new_token_id = all_input_ids[-1]
     # This is the first iteration for this sequence
     is_first_iter = prev_tokens is None
@@ -282,7 +297,10 @@ def detokenize_incrementally(
     assert prev_tokens is not None
 
     # If the new token id is out of bounds, return an empty string.
+    print("detokenize_incrementally len(tokenizer)", len(tokenizer))
     if new_token_id >= len(tokenizer):
+        if new_token_id == 151666:
+            new_tokens = []
         new_tokens = [""]
     else:
         # Put new_token_id in a list so skip_special_tokens is respected
@@ -299,6 +317,7 @@ def detokenize_incrementally(
     # The prefix text is necessary only to defeat cleanup algorithms in
     # the decode which decide to add a space or not depending on the
     # surrounding ids.
+    print("detokenize_incrementally tokenizer.get_added_vocab()", tokenizer.is_fast, tokenizer.get_added_vocab())
     if tokenizer.is_fast or not tokenizer.get_added_vocab():
         prefix_text = tokenizer.convert_tokens_to_string(
             output_tokens[prefix_offset:read_offset])
@@ -317,7 +336,7 @@ def detokenize_incrementally(
             skip_special_tokens=skip_special_tokens,
             spaces_between_special_tokens=spaces_between_special_tokens,
         )
-
+    print("detokenize_incrementally len(new_text) <= len(prefix_text)", len(new_text), len(prefix_text), new_text)
     if len(new_text) <= len(prefix_text) or new_text.endswith("�"):
         # utf-8 char at the end means it's a potential unfinished byte sequence
         # from byte fallback tokenization.
@@ -326,4 +345,6 @@ def detokenize_incrementally(
         return new_tokens, "", prefix_offset, read_offset
 
     new_text = new_text[len(prefix_text):]
+    print("detokenize_incrementally prefix_text", prefix_text)
+    print("detokenize_incrementally return", new_tokens, new_text, read_offset, len(output_tokens))
     return new_tokens, new_text, read_offset, len(output_tokens)

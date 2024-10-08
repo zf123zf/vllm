@@ -265,9 +265,12 @@ class Sampler(nn.Module):
 
         # We use float32 for probabilities and log probabilities.
         # Compute the probabilities.
+        print("Sampler logits.shape", logits.shape)
         probs = torch.softmax(logits, dim=-1, dtype=torch.float)
         # Compute the log probabilities.
+        print("Sampler probs.shape", probs.shape)
         logprobs = torch.log_softmax(logits, dim=-1, dtype=torch.float)
+        print("Sampler logprobs.shape", logprobs.shape)
 
         # Sample the next tokens.
         maybe_deferred_sample_results, maybe_sampled_tokens_tensor = _sample(
@@ -278,7 +281,12 @@ class Sampler(nn.Module):
             include_gpu_probs_tensor=self.include_gpu_probs_tensor,
             modify_greedy_probs=self._should_modify_greedy_probs_inplace,
         )
+        # print("Sampler sampling_tensors", sampling_tensors)
+        # print("Sampler sampling_metadata", sampling_metadata)
+        # print("Sampler maybe_deferred_sample_results", maybe_deferred_sample_results)
+        print("Sampler maybe_sampled_tokens_tensor", maybe_sampled_tokens_tensor)
 
+        print("Sampler self.include_gpu_probs_tensor", self.include_gpu_probs_tensor)
         if self.include_gpu_probs_tensor:
             # Since we will defer sampler result Pythonization,
             # preserve GPU-side tensors in support of later
@@ -293,12 +301,15 @@ class Sampler(nn.Module):
         # Get the logprobs query results.
         prompt_logprobs = None
         sample_logprobs = None
+        print("Sampler sampling_metadata.skip_sampler_cpu_output", sampling_metadata.skip_sampler_cpu_output)
         if not sampling_metadata.skip_sampler_cpu_output:
             # Pythonize logprobs now (GPU -> CPU); do not defer.
             assert not isinstance(maybe_deferred_sample_results,
                                   SampleResultArgsType)
+            # print("Sampler get_logprobs req", logprobs, sampling_metadata, maybe_deferred_sample_results)
             prompt_logprobs, sample_logprobs = get_logprobs(
                 logprobs, sampling_metadata, maybe_deferred_sample_results)
+            # print("Sampler get_logprobs resp", prompt_logprobs, sample_logprobs)
 
         return _build_sampler_output(
             maybe_deferred_sample_results,
@@ -1280,7 +1291,11 @@ def _build_sampler_output(
     else:
         sampled_token_probs, logprobs_tensor, sampled_token_ids = (None, None,
                                                                    None)
-
+    # print("_build_sampler_output sampler_output", sampler_output)
+    print("_build_sampler_output sampled_token_probs", sampled_token_probs)
+    print("_build_sampler_output sampled_token_ids", sampled_token_ids)
+    print("_build_sampler_output logprobs_tensor", logprobs_tensor)
+    print("_build_sampler_output deferred_sample_results_args", deferred_sample_results_args)
     return SamplerOutput(
         outputs=sampler_output,
         sampled_token_probs=sampled_token_probs,

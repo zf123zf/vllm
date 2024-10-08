@@ -155,7 +155,7 @@ def build_model(model_class: Type[nn.Module], hf_config: PretrainedConfig,
     extra_kwargs = _get_model_initialization_kwargs(model_class, lora_config,
                                                     multimodal_config,
                                                     scheduler_config)
-
+    print("---model_class", model_class)
     return model_class(config=hf_config,
                        cache_config=cache_config,
                        quant_config=quant_config,
@@ -369,6 +369,7 @@ class DefaultModelLoader(BaseModelLoader):
                                                True)), )
 
             for _, module in model.named_modules():
+                # print("---module && quant_method", module, getattr(module, "quant_method", None))
                 quant_method = getattr(module, "quant_method", None)
                 if quant_method is not None:
                     # When quant methods need to process weights after loading

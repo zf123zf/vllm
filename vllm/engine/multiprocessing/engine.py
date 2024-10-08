@@ -186,7 +186,7 @@ class MQLLMEngine:
 
             # Engine step.
             request_outputs = self.engine_step()
-
+            print("run_engine_loop request_outputs", request_outputs)
             # Send request outputs (if async, done in engine_step callback).
             if not self.use_async_sockets:
                 self._send_outputs(request_outputs)

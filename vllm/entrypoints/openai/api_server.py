@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, "/workspace/vllm")
 import asyncio
 import importlib
 import inspect
@@ -265,6 +267,8 @@ def engine_client(request: Request) -> EngineClient:
 
 @router.get("/health")
 async def health(raw_request: Request) -> Response:
+    print("======health========")
+    print("======health========")
     """Health check."""
     await engine_client(raw_request).check_health()
     return Response(status_code=200)

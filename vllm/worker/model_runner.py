@@ -1371,6 +1371,8 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
         batch_size_capture_list = [
             bs for bs in _BATCH_SIZES_TO_CAPTURE if bs <= graph_batch_size
         ]
+        print("capture_model batch_size_capture_list", batch_size_capture_list)
+        print("capture_model self.parallel_config", self.parallel_config)
 
         with self.attn_state.graph_capture(
                 max_batch_size), graph_capture() as graph_capture_context:
@@ -1444,7 +1446,7 @@ class GPUModelRunnerBase(ModelRunnerBase[TModelInputForGPU]):
                         # encoder-decoder models.
                         self._update_inputs_to_capture_for_enc_dec_model(
                             capture_inputs)
-
+                    # print("capture_model capture_inputs", capture_inputs)
                     graph_runner.capture(**capture_inputs)
                     self.graph_memory_pool = graph_runner.graph.pool()
                     self.graph_runners[virtual_engine][batch_size] = (
@@ -1568,11 +1570,24 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
+        print("ModelRunner prefill_meta", type(prefill_meta))
+        if decode_meta:
+            print("ModelRunner decode_meta.use_cuda_graph", decode_meta.use_cuda_graph)
         if prefill_meta is None and decode_meta.use_cuda_graph:
             assert model_input.input_tokens is not None
             graph_batch_size = model_input.input_tokens.shape[0]
             model_executable = self.graph_runners[virtual_engine][
                 graph_batch_size]
+            # ModelRunner prefill_meta <class 'NoneType'>
+            # ModelRunner decode_meta.use_cuda_graph True
+            # ModelRunner virtual_engine 0
+            # ModelRunner graph_batch_size 1
+            # ModelRunner self.graph_runners [{256: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9248e0>, 248: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e924a60>, 240: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e925e40>, 232: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e925ff0>, 224: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9260b0>, 216: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926140>, 208: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926200>, 200: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926260>, 192: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926350>, 184: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9263b0>, 176: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926440>, 168: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9264d0>, 160: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926560>, 152: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926680>, 144: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926740>, 136: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9267a0>, 128: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926830>, 120: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9268c0>, 112: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926950>, 104: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9269e0>, 96: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926a70>, 88: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926b00>, 80: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926b90>, 72: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926c20>, 64: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926cb0>, 56: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926d40>, 48: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926dd0>, 40: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926e60>, 32: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926ef0>, 24: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e926f80>, 16: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e927010>, 8: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9270a0>, 4: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e927130>, 2: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e9271c0>, 1: <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e927250>}]
+            # ModelRunner model_executable <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e927250>
+            print("ModelRunner virtual_engine", virtual_engine)
+            print("ModelRunner graph_batch_size", graph_batch_size)
+            # print("ModelRunner self.graph_runners", self.graph_runners)
+            print("ModelRunner model_executable", model_executable)
         else:
             model_executable = self.model
 
@@ -1602,7 +1617,13 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_end.record()
 
         # Compute the logits in the last pipeline stage.
+        # ModelRunner get_pp_group().is_last_rank True
+        print("ModelRunner get_pp_group().is_last_rank", get_pp_group().is_last_rank)
         if not get_pp_group().is_last_rank:
+            print("ModelRunner self.is_driver_worker", self.is_driver_worker)
+            print("ModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states)
+            print("ModelRunner observability_config", self.observability_config)
+            print("ModelRunner model_forward_end", model_forward_end)
             if (self.is_driver_worker
                     and hidden_or_intermediate_states is not None
                     and isinstance(hidden_or_intermediate_states,
@@ -1620,8 +1641,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     torch.tensor(model_forward_time + orig_model_forward_time))
             return hidden_or_intermediate_states
 
+        # print("ModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states)
+        # print("ModelRunner model_input.sampling_metadata", model_input.sampling_metadata)
         logits = self.model.compute_logits(hidden_or_intermediate_states,
                                            model_input.sampling_metadata)
+        print("ModelRunner logits", logits)
 
         if not self.is_driver_worker:
             return []
@@ -1634,6 +1658,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             logits=logits,
             sampling_metadata=model_input.sampling_metadata,
         )
+        # ModelRunner self.observability_config ObservabilityConfig(otlp_traces_endpoint=None, collect_model_forward_time=False, collect_model_execute_time=False)
+        # ModelRunner  SamplerOutput(outputs=[CompletionSequenceGroupOutput(samples=[SequenceOutput(parent_seq_id=0, output_token=97706, logprobs={97706: Logprob(logprob=inf, rank=None, decoded_token=None)})], prompt_logprobs=None)], sampled_token_probs=None, sampled_token_ids=None, spec_decode_worker_metrics=None)
+        print("ModelRunner self.observability_config", self.observability_config)
+        print("ModelRunner output", output)
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time
                 and output is not None):
@@ -1650,7 +1678,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             # the communication time as well.
             output.model_forward_time = (orig_model_forward_time +
                                          model_forward_time)
-
+        print("ModelRunner return_hidden_states", self.return_hidden_states)
         if self.return_hidden_states:
             # we only need to pass hidden states of most recent token
             assert model_input.sampling_metadata is not None
@@ -1665,7 +1693,10 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 hidden_states = hidden_or_intermediate_states
 
             output.hidden_states = hidden_states
-
+        # ModelRunner output SamplerOutput(outputs=[CompletionSequenceGroupOutput(samples=[SequenceOutput(parent_seq_id=0, output_token=50930, logprobs={50930: Logprob(logprob=inf, rank=None, decoded_token=None)})], prompt_logprobs=None)], sampled_token_probs=None, sampled_token_ids=None, spec_decode_worker_metrics=None)
+        # ModelRunner return_hidden_states False
+        # ModelRunner final output SamplerOutput(outputs=[CompletionSequenceGroupOutput(samples=[SequenceOutput(parent_seq_id=0, output_token=50930, logprobs={50930: Logprob(logprob=inf, rank=None, decoded_token=None)})], prompt_logprobs=None)], sampled_token_probs=None, sampled_token_ids=None, spec_decode_worker_metrics=None)
+        print("ModelRunner final output", output)
         return [output]
 
 

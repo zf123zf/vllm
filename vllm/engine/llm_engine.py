@@ -114,6 +114,7 @@ class SchedulerContext:
                        is_async=is_async,
                        is_last_step=is_last_step,
                        skip=[]))
+        # print("SchedulerContext self.output_queue", self.output_queue)
 
 
 class LLMEngine:
@@ -942,6 +943,7 @@ class LLMEngine:
 
         finished_before: List[int] = []
         finished_now: List[int] = []
+        print("_process_model_outputs indices", indices, outputs)
         for i in indices:
             if i in skip:
                 continue
@@ -980,14 +982,17 @@ class LLMEngine:
                         else:
                             seq_group.metrics.model_execute_time = (
                                 o.model_execute_time)
-
+            print("_process_model_outputs self.model_config.embedding_mode", self.model_config.embedding_mode, seq_group)
             if self.model_config.embedding_mode:
                 self._process_sequence_group_outputs(seq_group, output)
             else:
+                print("_process_model_outputs self.output_processor 1", self.output_processor, seq_group_meta.do_sample)
                 self.output_processor.process_prompt_logprob(seq_group, output)
+                print("_process_model_outputs self.output_processor 2", seq_group)
                 if seq_group_meta.do_sample:
                     self.output_processor.process_outputs(
                         seq_group, output, is_async)
+                print("_process_model_outputs self.output_processor 3", seq_group)
 
             if seq_group.is_finished():
                 finished_now.append(i)
@@ -1080,14 +1085,17 @@ class LLMEngine:
         """
         for seq_group_metadata, sequence_group_outputs, scheduled_seq_group in \
             zip(seq_group_metadata_list, output, scheduled_seq_groups):
+            print("_advance_to_next_step seq_group_metadata", seq_group_metadata)
+            print("_advance_to_next_step sequence_group_outputs", sequence_group_outputs, )
+            print("_advance_to_next_step scheduled_seq_group", scheduled_seq_group)
             seq_group = scheduled_seq_group.seq_group
-
+            print("_advance_to_next_step seq_group", seq_group)
             if seq_group.is_finished():
                 continue
 
             seq_group.update_num_computed_tokens(
                 seq_group_metadata.token_chunk_size)
-
+            print("_advance_to_next_step seq_group_metadata.do_sample", seq_group_metadata.do_sample)
             if seq_group_metadata.do_sample:
                 assert len(sequence_group_outputs.samples) == 1, (
                     "Async output processor expects a single sample"
@@ -1095,9 +1103,11 @@ class LLMEngine:
                     "sampling_params.best_of > 1)")
                 sample = sequence_group_outputs.samples[0]
 
+                print("_advance_to_next_step seq_group.seqs", seq_group.seqs)
                 assert len(seq_group.seqs) == 1
                 seq = seq_group.seqs[0]
                 seq.append_token_id(sample.output_token, sample.logprobs)
+            print("_advance_to_next_step seq_group", seq_group)
 
     def step(self) -> List[Union[RequestOutput, EmbeddingRequestOutput]]:
         """Performs one decoding iteration and returns newly generated results.
@@ -1165,6 +1175,7 @@ class LLMEngine:
         seq_group_metadata_list = cached_outputs.seq_group_metadata_list
         scheduler_outputs = cached_outputs.scheduler_outputs
         allow_async_output_proc = cached_outputs.allow_async_output_proc
+        print("step scheduler_outputs", virtual_engine, allow_async_output_proc, scheduler_outputs)
 
         ctx = self.scheduler_contexts[virtual_engine]
 
@@ -1227,7 +1238,10 @@ class LLMEngine:
 
             outputs = self.model_executor.execute_model(
                 execute_model_req=execute_model_req)
-
+            print("step execute_model_req", execute_model_req)
+            print("step len(outputs)", len(outputs))
+            print("step outputs[0]", outputs[0])
+            print("step self.scheduler_config.is_multi_step", self.scheduler_config.is_multi_step)
             # We need to do this here so that last step's sampled_token_ids can
             # be passed to the next iteration for PP.
             if self.scheduler_config.is_multi_step:
@@ -1246,17 +1260,18 @@ class LLMEngine:
                 seq_group.finish_step()
 
         if not self._has_remaining_steps(seq_group_metadata_list):
+            print("step not self._has_remaining_steps")
             # clear the cache if we have finished all the steps.
             if self.scheduler_config.is_multi_step:
                 self.cached_scheduler_outputs[0] = SchedulerOutputState()
-
             # Add results to the output_queue
             ctx.append_output(outputs=outputs,
                               seq_group_metadata_list=seq_group_metadata_list,
                               scheduler_outputs=scheduler_outputs,
                               is_async=allow_async_output_proc,
                               is_last_step=True)
-
+            print("step allow_async_output_proc", allow_async_output_proc)
+            print("step outputs", outputs)
             if outputs and allow_async_output_proc:
                 assert len(outputs) == 1, (
                     "Async postprocessor expects only a single output set")
@@ -1279,6 +1294,7 @@ class LLMEngine:
             return ctx.request_outputs
 
         if not self.has_unfinished_requests():
+            print("step not self.has_unfinished_requests()")
             # Drain async postprocessor (if exists)
             if len(ctx.output_queue) > 0:
                 self._process_model_outputs(ctx=ctx)

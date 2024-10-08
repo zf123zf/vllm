@@ -603,6 +603,8 @@ class Sequence:
     def __repr__(self) -> str:
         return (f"Sequence(seq_id={self.seq_id}, "
                 f"status={self.status.name}, "
+                f"data={self.data}, "
+                f"output_logprobs={self.output_logprobs}, "
                 f"num_blocks={self.n_blocks}, ")
 
 
@@ -878,6 +880,7 @@ class SequenceGroup:
     def __repr__(self) -> str:
         return (f"SequenceGroup(request_id={self.request_id}, "
                 f"sampling_params={self.sampling_params}, "
+                f"seqs={self.seqs}, "
                 f"num_seqs={len(self.seqs)})")
 
 

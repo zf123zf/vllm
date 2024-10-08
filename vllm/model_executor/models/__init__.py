@@ -54,6 +54,7 @@ _GENERATION_MODELS = {
     "Phi3ForCausalLM": ("phi3", "Phi3ForCausalLM"),
     "PhiMoEForCausalLM": ("phimoe", "PhiMoEForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
+    "Qwen2ForRewardModel": ("qwen2_5_rm", "Qwen2ForRewardModel"),
     "Qwen2MoeForCausalLM": ("qwen2_moe", "Qwen2MoeForCausalLM"),
     "Qwen2VLForConditionalGeneration":
     ("qwen2_vl", "Qwen2VLForConditionalGeneration"),
@@ -128,6 +129,8 @@ _ROCM_SWA_REASON = ("Sliding window attention (SWA) is not yet supported in "
                     "please use CK flash attention by setting "
                     "`VLLM_USE_TRITON_FLASH_ATTN=0`")
 _ROCM_PARTIALLY_SUPPORTED_MODELS: Dict[str, str] = {
+    "Qwen2ForRewardModel":
+    _ROCM_SWA_REASON,
     "Qwen2ForCausalLM":
     _ROCM_SWA_REASON,
     "MistralForCausalLM":
@@ -152,6 +155,7 @@ class ModelRegistry:
         module_name, model_cls_name = _MODELS[model_arch]
         module = importlib.import_module(
             f"vllm.model_executor.models.{module_name}")
+        print("_get_model----", model_arch)
         return getattr(module, model_cls_name, None)
 
     @staticmethod

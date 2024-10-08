@@ -37,6 +37,9 @@ class UnquantizedEmbeddingMethod(QuantizeMethodBase):
               layer: torch.nn.Module,
               x: torch.Tensor,
               bias: Optional[torch.Tensor] = None) -> torch.Tensor:
+        print("UnquantizedEmbeddingMethod apply", x.shape, layer.weight.shape)
+        if bias != None:
+            print("UnquantizedEmbeddingMethod bias", bias.shape)
         return F.linear(x, layer.weight, bias)
 
     def embedding(self, layer: torch.nn.Module,
@@ -224,6 +227,7 @@ class VocabParallelEmbedding(torch.nn.Module):
         self.embedding_dim = embedding_dim
 
         linear_method = None
+        print("VocabParallelEmbedding quant_config", quant_config)
         if quant_config is not None:
             linear_method = quant_config.get_quant_method(self, prefix=prefix)
         if linear_method is None:

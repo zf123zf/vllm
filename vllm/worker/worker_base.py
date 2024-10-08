@@ -323,7 +323,8 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                     and self.observability_config.collect_model_execute_time):
                 orig_model_execute_time = intermediate_tensors.tensors.get(
                     "model_execute_time", torch.tensor(0)).item()
-
+        # LocalOrDistributedWorkerBase self.model_runner <vllm.worker.model_runner.ModelRunner object at 0x7f1ac96809d0>
+        print("LocalOrDistributedWorkerBase self.model_runner", self.model_runner)
         output = self.model_runner.execute_model(
             model_input=model_input,
             kv_caches=self.kv_cache[worker_input.virtual_engine]
@@ -332,6 +333,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             num_steps=num_steps,
             **kwargs,
         )
+        print("LocalOrDistributedWorkerBase output", output)
 
         model_execute_time = time.perf_counter() - start_time
         if not get_pp_group().is_last_rank:

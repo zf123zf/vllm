@@ -51,14 +51,24 @@ class LogitsProcessor(nn.Module):
         sampling_metadata: SamplingMetadata,
         embedding_bias: Optional[torch.Tensor] = None,
     ) -> Optional[torch.Tensor]:
+        print("LogitsProcessor logits_as_input, hidden_states before prune", self.logits_as_input, hidden_states.shape)
         if self.logits_as_input:
             logits = hidden_states
         else:
+            # 1/16 [4096, 1536] -> [256, 1536]
             hidden_states = _prune_hidden_states(hidden_states,
                                                  sampling_metadata)
 
             # Get the logits for the next tokens.
+            # [256, 151936]
+            # lm_head VocabParallelEmbedding(num_embeddings=151936, embedding_dim=1536, org_vocab_size=151936, num_embeddings_padded=151936, tp_size=1)
             logits = self._get_logits(hidden_states, lm_head, embedding_bias)
+        if embedding_bias !=None:
+            print("LogitsProcessor embedding_bias", embedding_bias.shape)
+        if hidden_states !=None:
+            print("LogitsProcessor hidden_states", hidden_states.shape)
+        print("LogitsProcessor sampling_metadata.selected_token_indices", sampling_metadata.selected_token_indices.shape)
+        print("LogitsProcessor logits", logits.shape)
         if logits is not None:
             if self.soft_cap is not None:
                 logits = logits / self.soft_cap
@@ -80,12 +90,34 @@ class LogitsProcessor(nn.Module):
         embedding_bias: Optional[torch.Tensor],
     ) -> Optional[torch.Tensor]:
         # Get the logits for the next tokens.
+        
+        # _get_logits lm_head VocabParallelEmbedding(num_embeddings=151936, embedding_dim=1536, org_vocab_size=151936, num_embeddings_padded=151936, tp_size=1)
+        # _get_logits lm_head.linear_method <vllm.model_executor.layers.vocab_parallel_embedding.UnquantizedEmbeddingMethod object at 0x7f7910536980>
+        # _get_logits hidden_states torch.Size([256, 1536])
+
+        # _get_logits hidden_states[0] tensor([ 0.7344, -0.8906, -1.7109,  ...,  2.1250,  1.7812, -2.4219],
+        #        device='cuda:0', dtype=torch.bfloat16)
+        # _get_logits logits torch.Size([256, 151936]) True
+        # _get_logits logits after tensor_model_parallel_gather torch.Size([256, 151936])
+        # _get_logits logits torch.Size([256, 151936])
+        # _get_logits self.org_vocab_size 151936
+        # _get_logits logits torch.Size([256, 151936])
+        # _get_logits logits[0] tensor([ 8.6250,  6.3438,  2.8906,  ..., -5.3438, -5.3438, -5.3438],
+        #        device='cuda:0', dtype=torch.bfloat16)
+
+
+        print("_get_logits lm_head", lm_head)
+        print("_get_logits lm_head.linear_method", lm_head.linear_method)
+        print("_get_logits hidden_states", hidden_states.shape)
+        print("_get_logits hidden_states[0]", hidden_states[0])
         logits = lm_head.linear_method.apply(lm_head,
                                              hidden_states,
                                              bias=embedding_bias)
+        print("_get_logits logits", logits.shape, self.use_gather)
         if self.use_gather:
             # None may be returned for rank > 0
             logits = tensor_model_parallel_gather(logits)
+            print("_get_logits logits after tensor_model_parallel_gather", logits.shape)
         else:
             # Gather is not supported for some devices such as TPUs.
             # Use all-gather instead.
@@ -95,7 +127,11 @@ class LogitsProcessor(nn.Module):
             logits = tensor_model_parallel_all_gather(logits)
         # Remove paddings in vocab (if any).
         if logits is not None:
+            print("_get_logits logits", logits.shape)
+            print("_get_logits self.org_vocab_size", self.org_vocab_size)
             logits = logits[..., :self.org_vocab_size]
+            print("_get_logits logits", logits.shape)
+        print("_get_logits logits[0]", logits[0])
         return logits
 
     def extra_repr(self) -> str:

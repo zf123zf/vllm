@@ -541,6 +541,7 @@ class Scheduler:
         assert len(self._async_stopped) == 0
         while running_queue:
             seq_group = running_queue[0]
+            print("_schedule_running seq_group", seq_group)
             num_running_tokens = self._get_num_new_tokens(
                 seq_group, SequenceStatus.RUNNING, enable_chunking, budget)
 
@@ -640,7 +641,7 @@ class Scheduler:
 
         self._scheduler_running_outputs_cache[self.next_cache_id].reset()
         self._scheduled_seq_group_cache[self.next_cache_id].reset()
-
+        print("_schedule_running ret.decode_seq_groups_list", ret.decode_seq_groups_list)
         return ret
 
     def _schedule_swapped(
@@ -940,12 +941,15 @@ class Scheduler:
         # Update new running requests.
         if len(prefills.seq_groups) > 0:
             self.running.extend([s.seq_group for s in prefills.seq_groups])
-
+        print("_schedule_default running_scheduled.decode_seq_groups_list", running_scheduled.decode_seq_groups_list)
+        print("_schedule_default self.running 1", self.running)
         self.running.extend(running_scheduled.decode_seq_groups_list)
+        # print("_schedule_default self.running 2", self.running)
 
         if len(swapped_in.decode_seq_groups) > 0:
             self.running.extend(
                 [s.seq_group for s in swapped_in.decode_seq_groups])
+        print("_schedule_default self.running 3", self.running)
 
         # Update swapped requests.
         self.swapped.extend(running_scheduled.swapped_out)
@@ -1071,6 +1075,7 @@ class Scheduler:
 
     def _schedule(self) -> SchedulerOutputs:
         """Schedule queued requests."""
+        print("_schedule self.scheduler_config.chunked_prefill_enabled", self.scheduler_config.chunked_prefill_enabled)
         if self.scheduler_config.chunked_prefill_enabled:
             return self._schedule_chunked_prefill()
         else:

@@ -427,6 +427,7 @@ class SamplingParams(
         return (
             f"SamplingParams(n={self.n}, "
             f"best_of={self.best_of}, "
+            f"detokenize={self.detokenize}, "
             f"presence_penalty={self.presence_penalty}, "
             f"frequency_penalty={self.frequency_penalty}, "
             f"repetition_penalty={self.repetition_penalty}, "

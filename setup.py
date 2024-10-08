@@ -134,7 +134,7 @@ class cmake_build_ext(build_ext):
             else:
                 nvcc_threads = 1
             num_jobs = max(1, num_jobs // nvcc_threads)
-
+        print("----num_jobs", num_jobs)
         return num_jobs, nvcc_threads
 
     #
@@ -202,6 +202,7 @@ class cmake_build_ext(build_ext):
         else:
             # Default build tool to whatever cmake picks.
             build_tool = []
+        print("---cmake ", ['cmake', ext.cmake_lists_dir, *build_tool, *cmake_args])
         subprocess.check_call(
             ['cmake', ext.cmake_lists_dir, *build_tool, *cmake_args],
             cwd=self.build_temp)
@@ -220,6 +221,7 @@ class cmake_build_ext(build_ext):
         targets = []
         target_name = lambda s: remove_prefix(remove_prefix(s, "vllm."),
                                               "vllm_flash_attn.")
+        print("----point 1")
         # Build all the extensions
         for ext in self.extensions:
             self.configure(ext)
@@ -233,7 +235,7 @@ class cmake_build_ext(build_ext):
             f"-j={num_jobs}",
             *[f"--target={name}" for name in targets],
         ]
-
+        print("----build_args", build_args)
         subprocess.check_call(["cmake", *build_args], cwd=self.build_temp)
 
         # Install the libraries

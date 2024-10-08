@@ -290,7 +290,7 @@ class Qwen2Model(nn.Module):
         return hidden_states
 
 
-class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
+class Qwen2ForRewardModel(nn.Module, SupportsLoRA):
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
@@ -320,7 +320,6 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         quant_config: Optional[QuantizationConfig] = None,
         lora_config: Optional[LoRAConfig] = None,
     ) -> None:
-        print("Qwen2ForCausalLM step init----")
         # TODO (@robertgshaw2): see if this can be moved out
         if (cache_config.sliding_window is not None
                 and hasattr(config, "max_window_layers")):
@@ -350,43 +349,13 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
 
         self.logits_processor = LogitsProcessor(config.vocab_size)
         self.sampler = Sampler()
-        # Qwen2ForCausalLM config Qwen2Config {
-        #   "_name_or_path": "/workspace/models/qwen/Qwen2-Math-1_5B",
-        #   "architectures": [
-        #     "Qwen2ForCausalLM"
-        #   ],
-        #   "attention_dropout": 0.0,
-        #   "bos_token_id": 151643,
-        #   "eos_token_id": 151643,
-        #   "hidden_act": "silu",
-        #   "hidden_size": 1536,
-        #   "initializer_range": 0.02,
-        #   "intermediate_size": 8960,
-        #   "max_position_embeddings": 4096,
-        #   "max_window_layers": 21,
-        #   "model_type": "qwen2",
-        #   "num_attention_heads": 12,
-        #   "num_hidden_layers": 28,
-        #   "num_key_value_heads": 2,
-        #   "rms_norm_eps": 1e-06,
-        #   "rope_theta": 10000,
-        #   "sliding_window": null,
-        #   "tie_word_embeddings": true,
-        #   "torch_dtype": "bfloat16",
-        #   "transformers_version": "4.44.2",
-        #   "use_cache": true,
-        #   "use_mrope": false,
-        #   "use_sliding_window": false,
-        #   "vocab_size": 151936
-        # }
-        # Qwen2ForCausalLM lora_config None
-        # Qwen2ForCausalLM quant_config None
-        # Qwen2ForCausalLM tie_word_embeddings True
 
-        print("Qwen2ForCausalLM config", config)
-        print("Qwen2ForCausalLM lora_config", lora_config)
-        print("Qwen2ForCausalLM quant_config", quant_config)
-        print("Qwen2ForCausalLM tie_word_embeddings", config.tie_word_embeddings)
+        self.num_labels = 1#config.num_labels
+        self.score = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(config.hidden_size, self.num_labels)
+        )
 
     def forward(
         self,
@@ -396,26 +365,8 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
     ) -> torch.Tensor:
-        
-        # 被调用者的信息
-        # import inspect
-        # print("Qwen2ForCausalLM forward from----")
-        # for i in inspect.stack():
-        #     print(i)
-        # print(inspect.stack()[1].function)
-        # print(inspect.stack()[1].filename)
-        # print(inspect.stack()[1].lineno)
-                
-        print("Qwen2ForCausalLM step forward----")
-        print("Qwen2ForCausalLM-forward input_ids", input_ids.shape) # 256
-        print("Qwen2ForCausalLM-forward positions", positions.shape)
-        # print("Qwen2ForCausalLM-forward kv_caches", kv_caches)
-        # print("Qwen2ForCausalLM-forward attn_metadata", attn_metadata)
-        print("Qwen2ForCausalLM-forward intermediate_tensors", intermediate_tensors)
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, intermediate_tensors)
-        # Qwen2ForCausalLM-forward hidden_states.shape torch.Size([2048, 1536])
-        print("Qwen2ForCausalLM-forward hidden_states.shape", hidden_states.shape)
         return hidden_states
 
     def compute_logits(
@@ -423,19 +374,15 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         hidden_states: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        print("Qwen2ForCausalLM step compute_logits----")
-        print("Qwen2ForCausalLM-compute_logits hidden_states", hidden_states.shape)
-        print("Qwen2ForCausalLM-compute_logits lm_head", self.lm_head)
-        # print("---compute_logits sampling_metadata", sampling_metadata)
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
-        print("Qwen2ForCausalLM-compute_logits logits", logits.shape)
+        logits = self.score(hidden_states)
+        # logits = self.logits_processor(self.lm_head, hidden_states,
+        #                                sampling_metadata)
+        print("compute_logits logits", logits.shape, logits[0])
         return logits
 
     def make_empty_intermediate_tensors(
             self, batch_size: int, dtype: torch.dtype,
             device: torch.device) -> IntermediateTensors:
-        print("Qwen2ForCausalLM step make_empty_intermediate_tensors----")
         return IntermediateTensors({
             "hidden_states":
             torch.zeros((batch_size, self.config.hidden_size),
@@ -452,15 +399,31 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[SamplerOutput]:
-        print("Qwen2ForCausalLM step sample----")
-        print("Qwen2ForCausalLM sample logits", logits.shape)
-        print("Qwen2ForCausalLM sample sampling_metadata", type(sampling_metadata))
-        next_tokens = self.sampler(logits, sampling_metadata)
-        # print("Qwen2ForCausalLM sample next_tokens", next_tokens)
+        print("sample logits", logits)
+        from vllm.sequence import (CompletionSequenceGroupOutput, Logprob,
+                           SequenceData, SequenceGroupMetadata, SequenceOutput)
+
+        sequence_output = SequenceOutput(
+            parent_seq_id=0,
+            # output_token = logits[0]
+            output_token = 151666,
+            logprobs={151666: Logprob(logprob=1, rank=None, decoded_token=str(logits.tolist()[0][0]))}
+        )
+        
+        completion_sequence_group_output = CompletionSequenceGroupOutput(
+            samples=[sequence_output],
+            prompt_logprobs=None,
+        )
+
+        next_tokens = SamplerOutput(
+            outputs=[completion_sequence_group_output],
+        )
+
+        # SamplerOutput(outputs=[CompletionSequenceGroupOutput(samples=[SequenceOutput(parent_seq_id=0, output_token=576, logprobs={576: Logprob(logprob=inf, rank=None, decoded_token=None)})], prompt_logprobs=None)], sampled_token_probs=None, sampled_token_ids=None, spec_decode_worker_metrics=None)
+
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
-        print("Qwen2ForCausalLM step load_weights----")
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
             ("qkv_proj", "q_proj", "q"),
@@ -470,7 +433,10 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
             ("gate_up_proj", "up_proj", 1),
         ]
         params_dict = dict(self.named_parameters(remove_duplicate=False))
+        name_set = set()
         for name, loaded_weight in weights:
+            name_set.add(name)
+            # print("---qwen2 weights items:", name, loaded_weight, loaded_weight.shape)
             if "rotary_emb.inv_freq" in name:
                 continue
             if self.config.tie_word_embeddings and "lm_head.weight" in name:
@@ -486,13 +452,14 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
                     continue
                 param = params_dict[name]
                 weight_loader = param.weight_loader
-                # print("---weight_loader", name, weight_loader)
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
                 # Skip loading extra bias for GPTQ models.
                 if name.endswith(".bias") and name not in params_dict:
                     continue
+                # if name.startswith("score"):
+                #     continue
                 # Remapping the name of FP8 kv-scale.
                 name = maybe_remap_kv_scale_name(name, params_dict)
                 if name is None:
@@ -502,5 +469,7 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA):
                 param = params_dict[name]
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
+                # if name.startswith("score"):
+                #     print("load_weights", name, weight_loader)
                 weight_loader(param, loaded_weight)
-                # print("---else weight_loader", name, weight_loader)
+        print("---name_set", name_set)
