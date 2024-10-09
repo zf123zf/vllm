@@ -124,7 +124,6 @@ class EmbeddingModelRunner(
                 intermediate_tensors=intermediate_tensors,
                 **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                              device=self.device))
-
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):
             model_forward_end.record()
@@ -151,7 +150,8 @@ class EmbeddingModelRunner(
         # Only perform pooling in the driver worker.
         if not self.is_driver_worker:
             return []
-
+        print("EmbeddingModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states.shape, hidden_or_intermediate_states)
+        print("EmbeddingModelRunner model_input.pooling_metadata", model_input.pooling_metadata)
         return [
             self.model.pooler(hidden_states=hidden_or_intermediate_states,
                               pooling_metadata=model_input.pooling_metadata)

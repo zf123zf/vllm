@@ -95,6 +95,8 @@ class OpenAIServingEmbedding(OpenAIServing):
         See https://platform.openai.com/docs/api-reference/embeddings/create
         for the API specification. This API mimics the OpenAI Embedding API.
         """
+        print("create_embedding request", request)
+        print("create_embedding raw_request", raw_request)
         if not self._enabled:
             return self.create_error_response("Embedding API disabled")
         error_check_ret = await self._check_model(request)
@@ -128,15 +130,17 @@ class OpenAIServingEmbedding(OpenAIServing):
                 lora_request,
                 prompt_adapter_request,
             ) = self._maybe_get_adapters(request)
-
+            print("create_embedding self.engine_client", self.engine_client)
             tokenizer = await self.engine_client.get_tokenizer(lora_request)
 
             pooling_params = request.to_pooling_params()
+            print("create_embedding pooling_params", pooling_params)
 
             prompts = list(
                 self._tokenize_prompt_input_or_inputs(request, tokenizer,
                                                       request.input,
                                                       truncate_prompt_tokens))
+            print("create_embedding prompts", prompts)
 
             for i, prompt_inputs in enumerate(prompts):
                 request_id_item = f"{request_id}-{i}"
@@ -151,7 +155,7 @@ class OpenAIServingEmbedding(OpenAIServing):
                     raise NotImplementedError(
                         "Prompt adapter is not supported "
                         "for embedding models")
-
+                print("create_embedding self.engine_client", self.engine_client)
                 generator = self.engine_client.encode(
                     {"prompt_token_ids": prompt_inputs["prompt_token_ids"]},
                     pooling_params,
@@ -164,11 +168,12 @@ class OpenAIServingEmbedding(OpenAIServing):
         except ValueError as e:
             # TODO: Use a vllm-specific Validation Error
             return self.create_error_response(str(e))
-
+        print("create_embedding generators", generators)
         result_generator = merge_async_iterators(
             *generators,
             is_cancelled=raw_request.is_disconnected if raw_request else None,
         )
+        print("create_embedding result_generator", result_generator)
 
         # Non-streaming response
         final_res_batch: List[Optional[EmbeddingRequestOutput]]
@@ -182,10 +187,11 @@ class OpenAIServingEmbedding(OpenAIServing):
 
             final_res_batch_checked = cast(List[EmbeddingRequestOutput],
                                            final_res_batch)
-
+            print("create_embedding request_output_to_embedding_response req", final_res_batch_checked, request_id, created_time, model_name, encoding_format)
             response = request_output_to_embedding_response(
                 final_res_batch_checked, request_id, created_time, model_name,
                 encoding_format)
+            print("create_embedding request_output_to_embedding_response resp", response)
         except asyncio.CancelledError:
             return self.create_error_response("Client disconnected")
         except ValueError as e:

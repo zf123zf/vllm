@@ -226,6 +226,7 @@ class ModelConfig:
 
     def _verify_embedding_mode(self) -> None:
         architectures = getattr(self.hf_config, "architectures", [])
+        print("ModelConfig architectures", architectures)
         self.embedding_mode = ModelRegistry.is_embedding_model(architectures)
 
     def _parse_quant_hf_config(self):

@@ -88,7 +88,6 @@ class Worker(LocalOrDistributedWorkerBase):
             or (speculative_config.draft_model_config.hf_config.model_type
                 not in ["medusa", "mlp_speculator", "eagle"]) \
                     else {"return_hidden_states": True}
-
         ModelRunnerClass: Type[GPUModelRunnerBase] = ModelRunner
         if model_runner_cls is not None:
             ModelRunnerClass = model_runner_cls
@@ -96,6 +95,9 @@ class Worker(LocalOrDistributedWorkerBase):
             ModelRunnerClass = EmbeddingModelRunner
         elif self._is_encoder_decoder_model():
             ModelRunnerClass = EncoderDecoderModelRunner
+        print("Worker self.model_config.is_embedding_model", self.model_config.is_embedding_model)
+        print("Worker _is_encoder_decoder_model", self._is_encoder_decoder_model())
+        print("Worker ModelRunnerClass", ModelRunnerClass)
         self.model_runner: GPUModelRunnerBase = ModelRunnerClass(
             model_config,
             parallel_config,

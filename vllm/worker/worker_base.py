@@ -447,7 +447,7 @@ class WorkerWrapperBase:
         else:
             mod = importlib.import_module(self.worker_module_name)
             worker_class = getattr(mod, self.worker_class_name)
-
+        print("WorkerWrapperBase worker_class", worker_class, self.worker_module_name)
         self.worker = worker_class(*args, **kwargs)
         assert self.worker is not None
 

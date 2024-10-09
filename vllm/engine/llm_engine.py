@@ -1388,6 +1388,7 @@ class LLMEngine:
                 execute_model_req.async_callback = self.async_callbacks[
                     virtual_engine]
 
+            print("step self.model_executor", self.model_executor)
             outputs = self.model_executor.execute_model(
                 execute_model_req=execute_model_req)
             print("step execute_model_req", execute_model_req)

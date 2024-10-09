@@ -67,7 +67,7 @@ class MultiprocessingGPUExecutor(DistributedGPUExecutor):
         # 127.0.0.1 for communication.
         distributed_init_method = get_distributed_init_method(
             "127.0.0.1", get_open_port())
-
+        print("MultiprocessingGPUExecutor distributed_init_method",distributed_init_method)
         self.workers: List[ProcessWorkerWrapper] = []
         # This is the list of workers that are rank 0 of each TP group EXCEPT
         # global rank 0. These are the workers that will broadcast to the
@@ -174,20 +174,25 @@ class MultiprocessingGPUExecutor(DistributedGPUExecutor):
         if max_concurrent_workers:
             raise NotImplementedError(
                 "max_concurrent_workers is not supported yet.")
-
+        print("_run_workers async_run_tensor_parallel_workers_only", async_run_tensor_parallel_workers_only)
+        print("_run_workers method", method)
+        for worker in self.workers:
+            print("_run_workers workers", worker)
+        for worker in self.non_driver_workers:
+            print("_run_workers non_driver_workers", worker)
         if async_run_tensor_parallel_workers_only:
             # Run only non-driver workers and just return futures.
             return [
                 worker.execute_method(method, *args, **kwargs)
                 for worker in self.non_driver_workers
             ]
-
+        
         # Start all remote workers first.
         worker_outputs = [
             worker.execute_method(method, *args, **kwargs)
             for worker in self.workers
         ]
-
+        print("_run_workers self.driver_worker,method", self.driver_worker, method)
         driver_worker_method = getattr(self.driver_worker, method)
         driver_worker_output = driver_worker_method(*args, **kwargs)
 

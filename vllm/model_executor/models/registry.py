@@ -271,11 +271,13 @@ class ModelRegistry:
         subprocess to avoid initializing CUDA for the main program.
         """
         model = ModelRegistry._try_get_model_stateless(model_arch)
+        print("_check_stateless model", model, model_arch, func)
         if model is not None:
             return func(model)
 
         try:
             mod_name, cls_name = ModelRegistry._get_module_cls_name(model_arch)
+            print("_check_stateless mod_name, cls_name", mod_name, cls_name)
         except KeyError:
             if default is not None:
                 return default
@@ -299,7 +301,7 @@ class ModelRegistry:
             f"from {func.__module__} import {func.__name__}",
             f"assert {func.__name__}({cls_name}), '{err_id}'",
         ])
-
+        print("_check_stateless stmts", stmts)
         result = subprocess.run([sys.executable, "-c", stmts],
                                 capture_output=True)
 

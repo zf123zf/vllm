@@ -162,9 +162,50 @@ def store_res(benchmark_res):
         json.dump(benchmark_res.__dict__, f)
         f.write("\n")
     
+def test_rm():
+    import torch
+    from transformers import AutoModel, AutoTokenizer
+
+    model_name = "/workspace/models/Qwen/Qwen2.5-Math-RM-72B"
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    chat = [
+        {"role": "system", "content": "Please reason step by step, and put your final answer within \\boxed{}."},
+        {"role": "user", "content": "Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"},
+        {"role": "assistant", "content": "To determine how much Janet makes from selling the duck eggs at the farmers' market, we need to follow these steps:\n\n1. Calculate the total number of eggs laid by the ducks each day.\n2. Determine how many eggs Janet eats and bakes for herself each day.\n3. Find out how many eggs are left to be sold.\n4. Calculate the revenue from selling the remaining eggs at $2 per egg.\n\nLet's start with the first step:\n\n1. Janet's ducks lay 16 eggs per day.\n\nNext, we calculate how many eggs Janet eats and bakes for herself each day:\n\n2. Janet eats 3 eggs for breakfast every morning.\n3. Janet bakes 4 eggs for her friends every day.\n\nSo, the total number of eggs Janet eats and bakes for herself each day is:\n\\[ 3 + 4 = 7 \\text{ eggs} \\]\n\nNow, we find out how many eggs are left to be sold:\n\\[ 16 - 7 = 9 \\text{ eggs} \\]\n\nFinally, we calculate the revenue from selling the remaining eggs at $2 per egg:\n\\[ 9 \\times 2 = 18 \\text{ dollars} \\]\n\nTherefore, Janet makes boxed18 dollars every day at the farmers' market."}
+    ]
+
+    conversation_str = tokenizer.apply_chat_template(
+        chat, 
+        tokenize=False, 
+        add_generation_prompt=False
+    )
+    from openai import OpenAI
+
+    # Modify OpenAI's API key and API base to use vLLM's API server.
+    openai_api_key = "EMPTY"
+    openai_api_base = "http://localhost:8000/v1"
+
+    client = OpenAI(
+        api_key=openai_api_key,
+        base_url=openai_api_base,
+    )
+
+    models = client.models.list()
+    model = models.data[0].id
+
+    responses = client.embeddings.create(
+        input=[conversation_str],
+        model=model,
+    )
+
+    for data in responses.data:
+        print(data.embedding[-1])  # 3.3125
+
 if __name__ == "__main__":
-    data_set = get_data_set(data_len=1)
-    get_res(data_set, type="vllm_RM", base_url="http://localhost:8000/v1", model_name="72B")
+    test_rm()
+    # data_set = get_data_set(data_len=1)
+    # get_res(data_set, type="vllm_RM", base_url="http://localhost:8000/v1", model_name="72B")
     # get_res(data_set, type="vllm", base_url="http://localhost:8000/v1", model_name="72B")
     # get_res(data_set, type="vllm", base_url="http://0.0.0.0:8000/v1", model_name="Qwen2-72B-Instruct")
     # get_res(data_set, type="lmdeploy", base_url="http://0.0.0.0:8000/v1", model_name="lmdeploy")

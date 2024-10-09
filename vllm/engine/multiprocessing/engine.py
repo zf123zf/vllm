@@ -132,8 +132,14 @@ class MQLLMEngine:
         """Creates an MQLLMEngine from the engine arguments."""
 
         engine_config = engine_args.create_engine_config()
-
+        print("from_engine_args engine_config", engine_config)
+        if engine_config.parallel_config and engine_config.parallel_config.distributed_executor_backend:
+            print("from_engine_args engine_config parallel_config", engine_config.parallel_config)
+            print("from_engine_args engine_config parallel_config distributed_executor_backend", engine_config.parallel_config.distributed_executor_backend)
+        if engine_config.device_config:
+            print("from_engine_args engine_config device_config", engine_config.device_config)
         executor_class = LLMEngine._get_executor_cls(engine_config)
+        print("from_engine_args executor_class", executor_class)
 
         return cls(
             ipc_path=ipc_path,
@@ -241,7 +247,7 @@ class MQLLMEngine:
             while self.input_socket.poll(timeout=0) != 0:
                 frames = self.input_socket.recv_multipart(copy=False)
                 request = pickle.loads(frames[0].buffer)
-
+                print("handle_new_input type(request)", type(request), request)
                 if isinstance(request, RPCProcessRequest):
                     if len(frames) > 1:
                         # Use cloudpickle for logits processors
@@ -384,7 +390,9 @@ def run_mp_engine(engine_args: AsyncEngineArgs, usage_context: UsageContext,
         raise KeyboardInterrupt("MQLLMEngine terminated")
 
     signal.signal(signal.SIGTERM, signal_handler)
-
+    print("run_mp_engine engine_args", engine_args)
+    print("run_mp_engine usage_context", usage_context)
+    print("run_mp_engine ipc_path", ipc_path)
     engine = MQLLMEngine.from_engine_args(engine_args=engine_args,
                                           usage_context=usage_context,
                                           ipc_path=ipc_path)

@@ -50,14 +50,17 @@ class Pooler(nn.Module):
             for prompt_len in prompt_lens:
                 pooled_data.append(hidden_states[offset:offset + prompt_len])
                 offset += prompt_len
+                print("Pooler offset", offset, prompt_len)
+            print("Pooler pooled_data", pooled_data)
         else:
             raise ValueError(f"Invalid pooling type: {self.pooling_type}")
 
+        print("Pooler self.normalize", self.normalize)
         if self.normalize:
             pooled_data = nn.functional.normalize(pooled_data, p=2, dim=1)
 
         pooled_outputs = [
             EmbeddingSequenceGroupOutput(data.tolist()) for data in pooled_data
         ]
-
+        print("Pooler pooled_outputs", pooled_outputs)
         return PoolerOutput(outputs=pooled_outputs)
