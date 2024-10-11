@@ -111,7 +111,7 @@ class Qwen2ForRewardModel(nn.Module, SupportsPP):
                                    attn_metadata, intermediate_tensors)
         logits, _ = self.score(hidden_states)
         print("Qwen2ForRewardModel logits.shape", logits.shape)
-        print("Qwen2ForRewardModel logits[0]", logits[0])
+        print("Qwen2ForRewardModel logits[-1]", logits[-1])
         return logits
 
     def pooler(

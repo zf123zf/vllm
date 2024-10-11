@@ -202,3 +202,4 @@ benchmarks/*.json
 
 # Linting
 actionlint
+zpush_quick.sh
