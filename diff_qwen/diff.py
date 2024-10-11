@@ -886,7 +886,7 @@ class Qwen2Model(Qwen2PreTrainedModel):
             position_ids = cache_position.unsqueeze(0)
 
         causal_mask = self._update_causal_mask(
-            attention_mask, inputs_embeds, cache_position, past_key_values, output_attentions, input_ids
+            attention_mask, inputs_embeds, cache_position, past_key_values, output_attentions
         )
 
         hidden_states = inputs_embeds
@@ -957,7 +957,6 @@ class Qwen2Model(Qwen2PreTrainedModel):
         cache_position: torch.Tensor,
         past_key_values: Cache,
         output_attentions: bool,
-        input_ids: torch.Tensor,
     ):
         # TODO: As of torch==2.2.0, the `attention_mask` passed to the model in `generate` is 2D and of dynamic length even when the static
         # KV cache is used. This is an issue for torch.compile which then recaptures cudagraphs at each decode steps due to the dynamic shapes.
@@ -1020,28 +1019,6 @@ class Qwen2Model(Qwen2PreTrainedModel):
             # Details: https://github.com/pytorch/pytorch/issues/110213
             causal_mask = AttentionMaskConverter._unmask_unattended(causal_mask, min_dtype)
 
-        if input_ids is not None:
-            for i in range(input_ids.shape[0]):
-                target_substring = torch.tensor([820, 14822, 220], dtype=input_ids.dtype, device=input_ids.device)
-                sub_len = target_substring.size(0)
-                matches = (input_ids[i].unfold(0, sub_len, 1) == target_substring).all(dim=1).nonzero(as_tuple=True)[0] + 3
-                sig_last = None
-                pos_list = []
-                for j in matches.flip(0):
-                    sig = input_ids[i, j] * 1000000 + input_ids[i, j+1]
-                    if sig_last is None or sig == sig_last:
-                        sig_last = sig
-                        pos_list.append(j-3)
-                    else:
-                        break
-                if len(pos_list) < 2:
-                    continue
-                pos_begin = pos_list[-1]
-                pos_end = input_ids.size(1)
-                for pos in pos_list[:-1]:
-                    causal_mask[i, :, pos:pos_end, pos_begin:pos] = min_dtype
-                    pos_end = pos
-        
         return causal_mask
 
 
@@ -1460,23 +1437,16 @@ class Qwen2ForTokenClassification(Qwen2PreTrainedModel):
     """,
     QWEN2_START_DOCSTRING,
 )
-
-class dumb(nn.Module):
-    def __init__(self, hidden_size):
-        super(dumb, self).__init__()
-        self.default = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size*2),
-            nn.ReLU(),
-            nn.Linear(hidden_size*2, 1)
-        )
-    def forward(self, x):
-        return self.default(x)
-
 class Qwen2ForRewardModel(Qwen2PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
+        self.num_labels = 1#config.num_labels
         self.model = Qwen2Model(config)
-        self.lora_score = dumb(config.hidden_size)
+        self.score = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(config.hidden_size, self.num_labels)
+        )
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1521,14 +1491,15 @@ class Qwen2ForRewardModel(Qwen2PreTrainedModel):
             return_dict=return_dict,
         )
         hidden_states = transformer_outputs[0]
-        logits = self.lora_score.default(hidden_states)
+        logits = self.score(hidden_states)
 
         if input_ids is not None:
             batch_size = input_ids.shape[0]
         else:
             batch_size = inputs_embeds.shape[0]
-        # if self.config.pad_token_id is None and batch_size != 1:
-        #     raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
+
+        if self.config.pad_token_id is None and batch_size != 1:
+            raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
         if self.config.pad_token_id is None:
             sequence_lengths = -1
         else:
@@ -1539,60 +1510,39 @@ class Qwen2ForRewardModel(Qwen2PreTrainedModel):
                 sequence_lengths = sequence_lengths.to(logits.device)
             else:
                 sequence_lengths = -1
-        pred_logits = []
 
-        loss = 0
+        pooled_logits = logits[torch.arange(batch_size, device=logits.device), sequence_lengths]
+
+        loss = None
         if labels is not None:
-            loss_fct = MSELoss()
             labels = labels.to(logits.device)
-            for i in range(labels.size(0)):
-                position = (labels[i] == 151645).nonzero(as_tuple=True)[0][0]
-                logit_pos = (input_ids[i] == 54509).nonzero(as_tuple=True)[0]
-                gt_label = []
-                for j in range(position-1, 0, -2):
-                    if labels[i, j] == 16 and labels[i, j-1] == 4999:
-                        gt_label.append(-1)
-                    elif labels[i, j] == 16 and labels[i, j-1] == 11:
-                        gt_label.append(1)
-                    elif labels[i, j] == 15 and labels[i, j-1] == 11:
-                        gt_label.append(0.5)
-                    else:
-                        break
-                gt_label = gt_label[::-1]
-                pred_label = logits[i, logit_pos, 0]
-                if len(gt_label) == pred_label.shape[0]:
-                    loss += loss_fct(pred_label, torch.tensor(gt_label, device=pred_label.device).float())
-                pred_token = torch.ones(pred_label.shape, device=pred_label.device, dtype=input_ids.dtype) * 15
-                pred_token[pred_label > 0] = 16
-                pred_logits.append(pred_token)
-            pred_logits = torch.nn.utils.rnn.pad_sequence(pred_logits, batch_first=True, padding_value=-100)
-            # if self.config.problem_type is None:
-            #     if self.num_labels == 1:
-            #         self.config.problem_type = "regression"
-            #     elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
-            #         self.config.problem_type = "single_label_classification"
-            #     else:
-            #         self.config.problem_type = "multi_label_classification"
+            if self.config.problem_type is None:
+                if self.num_labels == 1:
+                    self.config.problem_type = "regression"
+                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                    self.config.problem_type = "single_label_classification"
+                else:
+                    self.config.problem_type = "multi_label_classification"
 
-            # if self.config.problem_type == "regression":
-            #     loss_fct = MSELoss()
-            #     if self.num_labels == 1:
-            #         loss = loss_fct(pooled_logits.squeeze(), labels.squeeze())
-            #     else:
-            #         loss = loss_fct(pooled_logits, labels)
-            # elif self.config.problem_type == "single_label_classification":
-            #     loss_fct = CrossEntropyLoss()
-            #     loss = loss_fct(pooled_logits.view(-1, self.num_labels), labels.view(-1))
-            # elif self.config.problem_type == "multi_label_classification":
-            #     loss_fct = BCEWithLogitsLoss()
-            #     loss = loss_fct(pooled_logits, labels)
+            if self.config.problem_type == "regression":
+                loss_fct = MSELoss()
+                if self.num_labels == 1:
+                    loss = loss_fct(pooled_logits.squeeze(), labels.squeeze())
+                else:
+                    loss = loss_fct(pooled_logits, labels)
+            elif self.config.problem_type == "single_label_classification":
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(pooled_logits.view(-1, self.num_labels), labels.view(-1))
+            elif self.config.problem_type == "multi_label_classification":
+                loss_fct = BCEWithLogitsLoss()
+                loss = loss_fct(pooled_logits, labels)
         if not return_dict:
-            output = (pred_logits,) + transformer_outputs[1:]
+            output = (pooled_logits,) + transformer_outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
         return SequenceClassifierOutputWithPast(
             loss=loss,
-            logits=pred_logits,
+            logits=pooled_logits,
             past_key_values=transformer_outputs.past_key_values,
             hidden_states=transformer_outputs.hidden_states,
             attentions=transformer_outputs.attentions,
