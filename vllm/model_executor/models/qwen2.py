@@ -453,6 +453,7 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
+        print("Qwen2ForCausalLM-compute_logits start group_weights_with_prefix")
         weights_group = group_weights_with_prefix(weights)
 
         self.model.load_weights(weights_group["model"])

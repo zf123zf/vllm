@@ -35,6 +35,17 @@ class ReLU(nn.Module):
         input, _ = input
         return self.activation(input)
 
+class dumb(nn.Module):
+    def __init__(self, hidden_size, quant_config):
+        super(dumb, self).__init__()
+        self.default = nn.Sequential(
+            ColumnParallelLinear(hidden_size, hidden_size*2, quant_config=quant_config),
+            ReLU(),
+            ColumnParallelLinear(hidden_size*2, 1, quant_config=quant_config)
+        )
+
+    def forward(self, x):
+        return self.default(x)
 
 class Qwen2ForRewardModel(nn.Module, SupportsPP):
     packed_modules_mapping = {
@@ -94,6 +105,9 @@ class Qwen2ForRewardModel(nn.Module, SupportsPP):
             RowParallelLinear(config.hidden_size, 1,
                               quant_config=quant_config),
         )
+        # zf
+        self.lora_score = dumb(config.hidden_size, quant_config)
+
         self._pooler = Pooler(pooling_type=PoolingType.ALL, normalize=False)
 
         self.make_empty_intermediate_tensors = (
@@ -109,7 +123,11 @@ class Qwen2ForRewardModel(nn.Module, SupportsPP):
     ) -> Union[torch.Tensor, IntermediateTensors]:
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, intermediate_tensors)
-        logits, _ = self.score(hidden_states)
+        # zf
+        # logits, _ = self.score(hidden_states)
+        logits, _ = self.lora_score(hidden_states)
+        print("Qwen2ForRewardModel logits.shape", logits.shape)
+        print("Qwen2ForRewardModel logits[0]", logits[0])
         return logits
 
     def pooler(
@@ -124,9 +142,16 @@ class Qwen2ForRewardModel(nn.Module, SupportsPP):
 
         self.model.load_weights(weights_group["model"])
 
-        score_dict = dict(self.score.named_parameters())
-        for name, loaded_weight in weights_group["score"]:
-            param = score_dict[name]
+        # score_dict = dict(self.score.named_parameters())
+        # zf
+        lora_score_dict = dict(self.lora_score.named_parameters())
+        print("Qwen2ForRewardModel lora_score_dict", lora_score_dict)
+        print("Qwen2ForRewardModel weights_group.keys()", weights_group.keys())
+        for name, loaded_weight in weights_group["lora_score"]:
+            print("Qwen2ForRewardModel weights_group name", name)
+            param = lora_score_dict[name]
+            print("Qwen2ForRewardModel param", param)
             weight_loader = getattr(param, "weight_loader",
                                     default_weight_loader)
+            print("Qwen2ForRewardModel weight_loader", weight_loader)
             weight_loader(param, loaded_weight)
