@@ -803,14 +803,18 @@ class LLMEngine:
 
         if arrival_time is None:
             arrival_time = time.time()
-
+        print("add_request prompt", prompt)
+        print("add_request lora_request", lora_request)
+        print("add_request prompt_adapter_request", prompt_adapter_request)
         preprocessed_inputs = self.input_preprocessor.preprocess(
             prompt,
             request_id=request_id,
             lora_request=lora_request,
             prompt_adapter_request=prompt_adapter_request,
         )
+        print("add_request preprocessed_inputs", preprocessed_inputs)
         processed_inputs = self.input_processor(preprocessed_inputs)
+        print("add_request processed_inputs", processed_inputs)
 
         self._add_processed_request(
             request_id=request_id,

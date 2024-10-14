@@ -426,9 +426,11 @@ class InputPreprocessor:
     ) -> LLMInputs:
         prompt, prompt_token_ids, multi_modal_data = prompt_comps
 
+        print("prompt_token_ids 1", prompt_token_ids)
         prompt_token_ids = self._apply_prompt_adapter(
             prompt_token_ids, prompt_adapter_request=prompt_adapter_request)
-
+        print("prompt_token_ids 2", prompt_token_ids)
+        print("prompt", prompt)
         return LLMInputs(prompt_token_ids=prompt_token_ids,
                          prompt=prompt,
                          multi_modal_data=multi_modal_data)

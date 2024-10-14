@@ -38,6 +38,7 @@ class ReLU(nn.Module):
 class dumb(nn.Module):
     def __init__(self, hidden_size, quant_config):
         super(dumb, self).__init__()
+        print("dump hidden_size", hidden_size)
         self.default = nn.Sequential(
             ColumnParallelLinear(hidden_size, hidden_size*2, quant_config=quant_config),
             ReLU(),
@@ -125,10 +126,18 @@ class Qwen2ForRewardModel(nn.Module, SupportsPP):
                                    attn_metadata, intermediate_tensors)
         # zf
         # logits, _ = self.score(hidden_states)
+        print("Qwen2ForRewardModel hidden_states.shape", hidden_states.shape)
         logits, _ = self.lora_score(hidden_states)
-        print("Qwen2ForRewardModel logits.shape", logits.shape)
-        print("Qwen2ForRewardModel logits[0]", logits[0])
-        return logits
+
+        # zf 获取需要的预测结果
+        logit_pos = (input_ids == 54509).nonzero(as_tuple=True)[0]
+        print("position logit_pos", logit_pos)
+        res_logits = logits[logit_pos, 0]
+        print("position res_logits", res_logits)
+        res_logits = torch.where(res_logits > 0, torch.tensor(1), torch.tensor(0))
+        print("Qwen2ForRewardModel res_logits", res_logits)
+
+        return res_logits
 
     def pooler(
         self,
