@@ -345,7 +345,7 @@ class LLMEngine:
             prompt_adapter_config=prompt_adapter_config,
             observability_config=self.observability_config,
         )
-
+        print("LLMEngine self.model_config.embedding_mode", self.model_config.embedding_mode)
         if not self.model_config.embedding_mode:
             self._initialize_kv_caches()
 
@@ -481,6 +481,7 @@ class LLMEngine:
         The workers will determine the number of blocks in both the GPU cache
         and the swap CPU cache.
         """
+        print("_initialize_kv_caches self.model_executor", self.model_executor)
         num_gpu_blocks, num_cpu_blocks = (
             self.model_executor.determine_num_available_blocks())
 
@@ -1587,12 +1588,15 @@ class LLMEngine:
 
         # KV Cache Usage in %
         num_total_gpu = self.cache_config.num_gpu_blocks
+        print("do_log_stats num_total_gpu", num_total_gpu)
         gpu_cache_usage_sys = 0.
         if num_total_gpu is not None:
             num_free_gpu = sum(
                 scheduler.block_manager.get_num_free_gpu_blocks()
                 for scheduler in self.scheduler)
+            print("do_log_stats num_free_gpu", num_free_gpu)
             gpu_cache_usage_sys = 1.0 - (num_free_gpu / num_total_gpu)
+            print("do_log_stats gpu_cache_usage_sys", gpu_cache_usage_sys)
 
         num_total_cpu = self.cache_config.num_cpu_blocks
         cpu_cache_usage_sys = 0.

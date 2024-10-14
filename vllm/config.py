@@ -228,6 +228,7 @@ class ModelConfig:
         architectures = getattr(self.hf_config, "architectures", [])
         print("ModelConfig architectures", architectures)
         self.embedding_mode = ModelRegistry.is_embedding_model(architectures)
+        print("ModelConfig self.embedding_mode", self.embedding_mode)
 
     def _parse_quant_hf_config(self):
         quant_cfg = getattr(self.hf_config, "quantization_config", None)
@@ -442,6 +443,7 @@ class ModelConfig:
         if hasattr(self.hf_text_config, "head_dim"):
             return self.hf_text_config.head_dim
         # FIXME(woosuk): This may not be true for all models.
+        # 8192 / 64
         return (self.hf_text_config.hidden_size //
                 self.hf_text_config.num_attention_heads)
 
@@ -491,6 +493,7 @@ class ModelConfig:
     def get_num_kv_heads(self, parallel_config: "ParallelConfig") -> int:
         """Returns the number of KV heads per GPU."""
         total_num_kv_heads = self.get_total_num_kv_heads()
+        print("get_num_kv_heads total_num_kv_heads", total_num_kv_heads, parallel_config.tensor_parallel_size)
         # If tensor parallelism is used, we divide the number of KV heads by
         # the tensor parallel size. We will replicate the KV heads in the
         # case where the number of KV heads is smaller than the tensor
