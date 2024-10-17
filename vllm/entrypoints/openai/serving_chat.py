@@ -235,7 +235,9 @@ class OpenAIServingChat(OpenAIServing):
             if (not is_tracing_enabled and raw_request
                     and contains_trace_headers(raw_request.headers)):
                 log_tracing_disabled_warning()
-
+            print("OpenAIServingChat sampling_params", type(sampling_params), sampling_params) # vllm.sampling_params.SamplingParams
+            print("OpenAIServingChat self.engine_client", self.engine_client) # vllm.engine.multiprocessing.client.MQLLMEngineClient
+            print("OpenAIServingChat type(self.engine_client)", type(self.engine_client))
             if isinstance(sampling_params, BeamSearchParams):
                 assert isinstance(self.engine_client,
                                     (AsyncLLMEngine,

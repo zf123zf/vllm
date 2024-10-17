@@ -276,7 +276,7 @@ def detokenize_incrementally(
         spaces_between_special_tokens: Whether to add spaces between special
             tokens.
     """
-    print("detokenize_incrementally req tokenizer", tokenizer)
+    # print("detokenize_incrementally req tokenizer", tokenizer)
     print("detokenize_incrementally req all_input_ids", len(all_input_ids), all_input_ids)
     print("detokenize_incrementally req prev_tokens", prev_tokens)
     print("detokenize_incrementally req prefix_offset", prefix_offset)

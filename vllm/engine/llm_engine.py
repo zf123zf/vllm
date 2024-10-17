@@ -485,6 +485,7 @@ class LLMEngine:
         num_gpu_blocks, num_cpu_blocks = (
             self.model_executor.determine_num_available_blocks())
 
+        print("_initialize_kv_caches num_gpu_blocks, num_cpu_blocks", num_gpu_blocks, num_cpu_blocks)
         if self.cache_config.num_gpu_blocks_override is not None:
             num_gpu_blocks_override = self.cache_config.num_gpu_blocks_override
             logger.info(
@@ -811,7 +812,10 @@ class LLMEngine:
             lora_request=lora_request,
             prompt_adapter_request=prompt_adapter_request,
         )
+        print("add_request self.input_processor", self.input_processor)
+        print("add_request preprocessed_inputs", preprocessed_inputs)
         processed_inputs = self.input_processor(preprocessed_inputs)
+        print("add_request processed_inputs", processed_inputs)
 
         self._add_processed_request(
             request_id=request_id,
@@ -838,6 +842,9 @@ class LLMEngine:
     ) -> SequenceGroup:
         """Creates a SequenceGroup with SamplingParams."""
         max_logprobs = self.get_model_config().max_logprobs
+        print("_create_sequence_group_with_sampling max_logprobs", max_logprobs) # 20
+        print("_create_sequence_group_with_sampling sampling_params.logprobs", sampling_params.logprobs) # None
+        print("_create_sequence_group_with_sampling sampling_params.prompt_logprobs", sampling_params.prompt_logprobs) # None
         if (sampling_params.logprobs
                 and sampling_params.logprobs > max_logprobs) or (
                     sampling_params.prompt_logprobs
@@ -847,6 +854,7 @@ class LLMEngine:
 
         sampling_params = self._build_logits_processors(
             sampling_params, lora_request)
+        print("_create_sequence_group_with_sampling sampling_params", sampling_params) 
 
         # Defensive copy of SamplingParams, which are used by the sampler,
         # this doesn't deep-copy LogitsProcessor objects
@@ -866,7 +874,7 @@ class LLMEngine:
             prompt_adapter_request=prompt_adapter_request,
             encoder_seq=encoder_seq,
             priority=priority)
-
+        print("_create_sequence_group_with_sampling seq_group", seq_group) 
         return seq_group
 
     def _create_sequence_group_with_pooling(
@@ -1034,6 +1042,7 @@ class LLMEngine:
             scheduler_outputs.scheduled_seq_groups)
 
         has_multiple_outputs: bool = len(outputs) > 1
+        print("_process_model_outputs has_multiple_outputs", has_multiple_outputs)
         if has_multiple_outputs:
             assert self.scheduler_config.is_multi_step or \
                      self.speculative_config
@@ -1115,12 +1124,14 @@ class LLMEngine:
                 self._process_sequence_group_outputs(seq_group, output)
             else:
                 print("_process_model_outputs self.output_processor 1", self.output_processor, seq_group_meta.do_sample)
+                print("_process_model_outputs self.output_processor 1.5", seq_group)
+                print("_process_model_outputs self.output_processor 1.5 output", output)
                 self.output_processor.process_prompt_logprob(seq_group, output)
                 print("_process_model_outputs self.output_processor 2", seq_group)
                 if seq_group_meta.do_sample:
                     self.output_processor.process_outputs(
                         seq_group, output, is_async)
-                print("_process_model_outputs self.output_processor 3", seq_group)
+                print("_process_model_outputs self.output_processor 3", seq_group) # decode了
 
             if seq_group.is_finished():
                 finished_now.append(i)
@@ -1230,6 +1241,7 @@ class LLMEngine:
             seq_group = scheduled_seq_group.seq_group
             print("_advance_to_next_step seq_group", seq_group)
             if seq_group.is_finished():
+                print("_advance_to_next_step is_finished")
                 continue
 
             if self.scheduler_config.is_multi_step:
@@ -1258,7 +1270,7 @@ class LLMEngine:
                     seq.append_token_id(sample.output_token, sample.logprobs)
                     if not is_prefill_append:
                         seq_group.update_num_computed_tokens(1)
-                        print("_advance_to_next_step seq_group", seq_group)
+                        print("_advance_to_next_step seq_group 2", seq_group)
                 else:
                     seq.append_token_id(sample.output_token, sample.logprobs)
 
@@ -1338,12 +1350,15 @@ class LLMEngine:
         # Skip the scheduler if there are any remaining steps in the seq groups.
         # This ensures that the scheduler is only called again when the current
         # batch has completed.
+        print("step seq_group_metadata_list", seq_group_metadata_list)
         if not self._has_remaining_steps(seq_group_metadata_list):
             # Schedule iteration
             (seq_group_metadata_list, scheduler_outputs,
              allow_async_output_proc
              ) = self.scheduler[virtual_engine].schedule()
-
+            print("step scheduler res seq_group_metadata_list", seq_group_metadata_list)
+            print("step scheduler res scheduler_outputs", scheduler_outputs)
+            print("step scheduler res allow_async_output_proc", allow_async_output_proc)
             ctx.seq_group_metadata_list = seq_group_metadata_list
             ctx.scheduler_outputs = scheduler_outputs
 
@@ -1395,6 +1410,7 @@ class LLMEngine:
             print("step execute_model_req", execute_model_req)
             print("step len(outputs)", len(outputs))
             print("step outputs[0]", outputs[0])
+            print("step outputs\n")
             print("step self.scheduler_config.is_multi_step", self.scheduler_config.is_multi_step)
             # We need to do this here so that last step's sampled_token_ids can
             # be passed to the next iteration for PP.
@@ -1475,8 +1491,10 @@ class LLMEngine:
     def _has_remaining_steps(
         self, seq_group_metadata_list: Optional[List[SequenceGroupMetadata]]
     ) -> bool:
+        # print("_has_remaining_steps", self.scheduler_config.is_multi_step, seq_group_metadata_list) False
         if (not self.scheduler_config.is_multi_step
                 or not seq_group_metadata_list):
+            print("_has_remaining_steps 1")
             return False
 
         # TODO(will) this is a sanity check for nowto make sure that all the

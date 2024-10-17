@@ -233,6 +233,37 @@ class Qwen2Model(nn.Module):
     ) -> None:
         super().__init__()
         self.config = config
+        # Qwen2Config {
+        #     "_name_or_path": "/workspace/models/Qwen/Qwen2.5-Math-1.5B-Instruct",
+        #     "architectures": [
+        #         "Qwen2ForCausalLM"
+        #     ],
+        #     "attention_dropout": 0.0,
+        #     "bos_token_id": 151643,
+        #     "eos_token_id": 151645,
+        #     "hidden_act": "silu",
+        #     "hidden_size": 1536,
+        #     "initializer_range": 0.02,
+        #     "intermediate_size": 8960,
+        #     "max_position_embeddings": 4096,
+        #     "max_window_layers": 21,
+        #     "model_type": "qwen2",
+        #     "num_attention_heads": 12,
+        #     "num_hidden_layers": 28,
+        #     "num_key_value_heads": 2,
+        #     "rms_norm_eps": 1e-06,
+        #     "rope_scaling": null,
+        #     "rope_theta": 10000.0,
+        #     "sliding_window": null,
+        #     "tie_word_embeddings": true,
+        #     "torch_dtype": "bfloat16",
+        #     "transformers_version": "4.45.2",
+        #     "use_cache": true,
+        #     "use_sliding_window": false,
+        #     "vocab_size": 151936
+        # }
+        # print("Qwen2Model config", self.config)
+
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
@@ -257,6 +288,7 @@ class Qwen2Model(nn.Module):
         self.make_empty_intermediate_tensors = (
             make_empty_intermediate_tensors_factory(
                 ["hidden_states", "residual"], config.hidden_size))
+        print("Qwen2Model get_pp_group().is_last_rank", get_pp_group().is_last_rank) # true
         if get_pp_group().is_last_rank:
             self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         else:
@@ -414,24 +446,26 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
-        print("Qwen2ForCausalLM step forward----")
+        print("Qwen2ForCausalLM step forward----") # 1次
         print("Qwen2ForCausalLM-forward input_ids", input_ids.shape) # 256
         print("Qwen2ForCausalLM-forward positions", positions.shape)
         # print("Qwen2ForCausalLM-forward kv_caches", kv_caches)
         # print("Qwen2ForCausalLM-forward attn_metadata", attn_metadata)
         print("Qwen2ForCausalLM-forward intermediate_tensors", intermediate_tensors)
+        # print("Qwen2ForCausalLM-forward self.model", self.model)
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, intermediate_tensors)
-        # Qwen2ForCausalLM-forward hidden_states.shape torch.Size([2048, 1536])
+        # Qwen2ForCausalLM-forward hidden_states.shape torch.Size([474, 1536])
         print("Qwen2ForCausalLM-forward hidden_states.shape", hidden_states.shape)
         return hidden_states
 
+    # 每个类别的概率
     def compute_logits(
         self,
         hidden_states: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[torch.Tensor]:
-        print("Qwen2ForCausalLM step compute_logits----")
+        print("Qwen2ForCausalLM step compute_logits----") # 433次
         print("Qwen2ForCausalLM-compute_logits hidden_states", hidden_states.shape)
         print("Qwen2ForCausalLM-compute_logits lm_head", self.lm_head)
         # print("---compute_logits sampling_metadata", sampling_metadata)
@@ -440,16 +474,17 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         print("Qwen2ForCausalLM-compute_logits logits", logits.shape)
         return logits
 
+    # 按照采样策略选取下一个词
     def sample(
         self,
         logits: torch.Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> Optional[SamplerOutput]:
-        print("Qwen2ForCausalLM step sample----")
+        print("Qwen2ForCausalLM step sample----") # 433次
         print("Qwen2ForCausalLM sample logits", logits.shape)
         print("Qwen2ForCausalLM sample sampling_metadata", type(sampling_metadata))
         next_tokens = self.sampler(logits, sampling_metadata)
-        # print("Qwen2ForCausalLM sample next_tokens", next_tokens)
+        print("Qwen2ForCausalLM sample next_tokens", next_tokens)
         return next_tokens
 
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):

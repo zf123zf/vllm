@@ -209,26 +209,31 @@ class MQLLMEngine:
         """Core busy loop of the LLMEngine."""
 
         while True:
+            print("step run_engine_loop")
             self._alive()
             if not self.engine.has_unfinished_requests():
+                print("step self.engine.has_unfinished_requests()")
                 # Poll until there is work to do.
                 while self.input_socket.poll(timeout=POLLING_TIMEOUT_MS) == 0:
+                    print("step self.engine.has_unfinished_requests() 2")
                     self._alive()
                     self.engine.do_log_stats()
                     logger.debug("Waiting for new requests in engine loop.")
 
             # Handle any input from the client.
             self.handle_new_input()
-
+            print("step engine_step")
             # Engine step.
             request_outputs = self.engine_step()
             print("run_engine_loop request_outputs", request_outputs)
             # Send request outputs (if async, done in engine_step callback).
             if not self.use_async_sockets:
+                print("step self.use_async_sockets")
                 self._send_outputs(request_outputs)
 
     def engine_step(self) -> List[RequestOutput]:
         """Engine step wrapper with error handling."""
+        print("step engine_step 2")
         try:
             return self.engine.step()
         except SystemExit:
@@ -243,6 +248,7 @@ class MQLLMEngine:
 
     def handle_new_input(self):
         """Handle new input from the socket"""
+        print("step handle_new_input")
         try:
             while self.input_socket.poll(timeout=0) != 0:
                 frames = self.input_socket.recv_multipart(copy=False)
@@ -265,7 +271,7 @@ class MQLLMEngine:
                 else:
                     raise ValueError("Unknown RPCRequest Type: "
                                      f"{type(request)}")
-
+            print("step handle_new_input no poll")
         except Exception as e:
             self._set_errored(e)
             self._send_unhealthy(e)

@@ -125,6 +125,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
                     seq, sampling_params)
             else:
                 new_char_count = 0
+            # 检查是否结束
             self.stop_checker.maybe_stop_sequence(
                 seq,
                 new_char_count,
@@ -135,7 +136,7 @@ class SingleStepOutputProcessor(SequenceGroupOutputProcessor):
                 for scheduler in self.scheduler:
                     scheduler.free_seq(seq)
             return
-
+        print("sampling_params.best_of not 1")
         # TODO: Add support for async for beam search
         assert not is_async
 

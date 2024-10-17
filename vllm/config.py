@@ -1695,6 +1695,8 @@ def _get_and_verify_max_len(
 
     # If none of the keys were found in the config, use a default and
     # log a warning.
+    print("_get_and_verify_max_len derived_max_model_len", derived_max_model_len)
+    print("_get_and_verify_max_len max_len_key", max_len_key)
     if derived_max_model_len == float("inf"):
         if max_model_len is not None:
             # If max_model_len is specified, we use it.
@@ -1776,6 +1778,7 @@ def _get_and_verify_max_len(
                 raise ValueError(
                     f"{msg} To allow overriding this maximum, set "
                     "the env var VLLM_ALLOW_LONG_MAX_MODEL_LEN=1")
+    print("_get_and_verify_max_len max_model_len", max_model_len)
     return int(max_model_len)
 
 

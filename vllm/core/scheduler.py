@@ -474,6 +474,7 @@ class Scheduler:
             self.block_manager.free_cross(seq_group)
 
     def has_unfinished_seqs(self) -> bool:
+        print("has_unfinished_seqs", len(self.waiting), len(self.running), len(self.swapped))
         return len(self.waiting) != 0 or len(self.running) != 0 or len(
             self.swapped) != 0
 
@@ -1371,6 +1372,7 @@ class Scheduler:
 
     def free_seq(self, seq: Sequence) -> None:
         """Free a sequence from a block table."""
+        print("Scheduler free_seq self.block_manager", self.block_manager)
         self.block_manager.free(seq)
 
     def _free_finished_seqs(self, seq_group: SequenceGroup) -> None:

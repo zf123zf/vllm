@@ -671,14 +671,17 @@ def unified_flash_attention(
 
     prefill_output: Optional[torch.Tensor] = None
     decode_output: Optional[torch.Tensor] = None
-
+    # print("unified_flash_attention attn_metadata.prefill_metadata", attn_metadata.prefill_metadata)
     if prefill_meta := attn_metadata.prefill_metadata:
         # Prompt run.
+        print("unified_flash_attention kv_cache.numel()", kv_cache.numel())
+        print("unified_flash_attention prefill_meta.block_tables", prefill_meta.block_tables)
         if (kv_cache.numel() == 0 or prefill_meta.block_tables is None
                 or prefill_meta.block_tables.numel() == 0):
             # normal attention
             # When block_tables are not filled, it means q and k are the
             # prompt, and they have the same length.
+            print("unified_flash_attention prefill_output1")
             prefill_output = flash_attn_varlen_func(
                 q=query,
                 k=key,
@@ -694,7 +697,7 @@ def unified_flash_attention(
                 softcap=logits_soft_cap,
             )
         else:
-            # prefix-enabled attention
+            print("unified_flash_attention prefill_output2")
             assert prefill_meta.seq_lens is not None
             max_seq_len = max(prefill_meta.seq_lens)
             prefill_output = flash_attn_varlen_func(  # noqa
@@ -711,7 +714,7 @@ def unified_flash_attention(
                 block_table=prefill_meta.block_tables,
                 softcap=logits_soft_cap,
             )
-
+    # print("unified_flash_attention attn_metadata.decode_metadata", attn_metadata.decode_metadata)
     if decode_meta := attn_metadata.decode_metadata:
         # Decoding run.
         _, num_head, head_dim = decode_query.shape

@@ -107,6 +107,7 @@ class Qwen2ForRewardModel(nn.Module, SupportsPP):
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        print("Qwen2ForRewardModel self.model", self.model)
         hidden_states = self.model(input_ids, positions, kv_caches,
                                    attn_metadata, intermediate_tensors)
         logits, _ = self.score(hidden_states)

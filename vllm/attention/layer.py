@@ -80,6 +80,7 @@ class Attention(nn.Module):
                                         sliding_window, dtype, kv_cache_dtype,
                                         block_size, blocksparse_params
                                         is not None)
+        print("Attention attn_backend", attn_backend)
         impl_cls = attn_backend.get_impl_cls()
         self.impl = impl_cls(num_heads, head_size, scale, num_kv_heads,
                              alibi_slopes, sliding_window, kv_cache_dtype,

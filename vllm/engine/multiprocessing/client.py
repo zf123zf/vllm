@@ -628,6 +628,9 @@ class MQLLMEngineClient:
         # Constructing guided decoding logits processors is expensive, so we do
         # it here to avoid contending with cpu resources and the GIL on the
         # backend process.
+    
+        # print("_process_request type(params)", type(params)) # vllm.sampling_params.SamplingParams
+        # print("_process_request params.guided_decoding", params.guided_decoding) # not none
         if isinstance(params, SamplingParams) and \
             params.guided_decoding is not None:
             params = await \
@@ -636,6 +639,8 @@ class MQLLMEngineClient:
                     tokenizer=await self.get_tokenizer(lora_request),
                     default_guided_backend=self.decoding_config.guided_decoding_backend
                 )
+            # print("_process_request params", params) #SamplingParams(n=1, best_of=1, detokenize=True, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.0, temperature=0.7, top_p=1.0, top_k=-1, min_p=0.0, seed=None, stop=[], stop_token_ids=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=3622, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, truncate_prompt_tokens=None), guided_decoding=None
+
 
         # 1) Create output queue for this requests.
         queue: asyncio.Queue[Union[RequestOutput,
@@ -653,7 +658,7 @@ class MQLLMEngineClient:
                 lp_bytes = cloudpickle.dumps(logits_processors)
             else:
                 lp_bytes = None
-
+            print("MQLLMEngineClient lp_bytes", lp_bytes)
             request_bytes = pickle.dumps(
                 RPCProcessRequest(
                     prompt=prompt,
@@ -668,6 +673,7 @@ class MQLLMEngineClient:
             # 3) Send the RPCGenerateRequest to the MQLLMEngine.
             parts = (request_bytes,
                      lp_bytes) if lp_bytes else (request_bytes, )
+            print("self.input_socket.send_multipart parts", parts)
             await self.input_socket.send_multipart(parts, copy=False)
 
             # 4) Stream the RequestOutputs from the output queue. Note

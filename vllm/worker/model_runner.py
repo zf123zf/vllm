@@ -1631,6 +1631,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         if prefill_meta is None and decode_meta.use_cuda_graph:
             assert model_input.input_tokens is not None
             graph_batch_size = model_input.input_tokens.shape[0]
+            print("ModelRunner self.graph_runners", self.graph_runners)
+            print("ModelRunner self.graph_runners", self.graph_runners[virtual_engine])
             model_executable = self.graph_runners[virtual_engine][
                 graph_batch_size]
             # ModelRunner prefill_meta <class 'NoneType'>
@@ -1641,7 +1643,6 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             # ModelRunner model_executable <vllm.worker.model_runner.CUDAGraphRunner object at 0x7f242e927250>
             print("ModelRunner virtual_engine", virtual_engine)
             print("ModelRunner graph_batch_size", graph_batch_size)
-            # print("ModelRunner self.graph_runners", self.graph_runners)
             print("ModelRunner model_executable", model_executable)
         else:
             model_executable = self.model
@@ -1658,6 +1659,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             model_forward_start.record()
 
         with set_forward_context(model_input.attn_metadata):
+            print("ModelRunner model_executable 2", model_executable)
             hidden_or_intermediate_states = model_executable(
                 input_ids=model_input.input_tokens,
                 positions=model_input.input_positions,
@@ -1674,7 +1676,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
         # Compute the logits in the last pipeline stage.
         # ModelRunner get_pp_group().is_last_rank True
-        print("ModelRunner get_pp_group().is_last_rank", get_pp_group().is_last_rank)
+        print("ModelRunner get_pp_group().is_last_rank", get_pp_group().is_last_rank) # 433次
         if not get_pp_group().is_last_rank:
             print("ModelRunner self.is_driver_worker", self.is_driver_worker)
             print("ModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states)
@@ -1697,11 +1699,14 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     torch.tensor(model_forward_time + orig_model_forward_time))
             return hidden_or_intermediate_states
 
-        # print("ModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states)
-        # print("ModelRunner model_input.sampling_metadata", model_input.sampling_metadata)
+        print("ModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states.shape) # seq_len * 1536
+        print("ModelRunner hidden_or_intermediate_states[0]", hidden_or_intermediate_states[0])
+        print("ModelRunner model_input.sampling_metadata", model_input.sampling_metadata)
+        print("ModelRunner self.model", self.model)
         logits = self.model.compute_logits(hidden_or_intermediate_states,
                                            model_input.sampling_metadata)
-        print("ModelRunner logits", logits)
+        print("ModelRunner logits shape", logits.shape) # torch.Size([1, 151936])
+        print("ModelRunner logits[0]", logits[0])
 
         if not self.is_driver_worker:
             return []

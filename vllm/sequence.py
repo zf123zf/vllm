@@ -355,6 +355,7 @@ class SequenceData(msgspec.Struct,
         return (f"SequenceData("
                 f"prompt_token_ids={self._prompt_token_ids}, "
                 f"output_token_ids={self.output_token_ids}, "
+                f"_output_token_ids={self._output_token_ids}, "
                 f"cumulative_logprob={self.cumulative_logprob}, "
                 f"get_num_computed_tokens={self.get_num_computed_tokens()}")
 
@@ -603,6 +604,7 @@ class Sequence:
         return (f"Sequence(seq_id={self.seq_id}, "
                 f"status={self.status.name}, "
                 f"data={self.data}, "
+                f"eos_token_id={self.eos_token_id}, "
                 f"output_logprobs={self.output_logprobs}, "
                 f"num_blocks={self.n_blocks}, ")
 
