@@ -1250,6 +1250,7 @@ class LLMEngine:
                     seq_group, seq_group_metadata,
                     seq_group.state.num_steps == 1)
             else:
+                print("_advance_to_next_step update_num_computed_tokens", seq_group_metadata.token_chunk_size)
                 seq_group.update_num_computed_tokens(
                     seq_group_metadata.token_chunk_size)
             print("_advance_to_next_step seq_group_metadata.do_sample", seq_group_metadata.do_sample)
@@ -1353,9 +1354,7 @@ class LLMEngine:
         print("step seq_group_metadata_list", seq_group_metadata_list)
         if not self._has_remaining_steps(seq_group_metadata_list):
             # Schedule iteration
-            (seq_group_metadata_list, scheduler_outputs,
-             allow_async_output_proc
-             ) = self.scheduler[virtual_engine].schedule()
+            (seq_group_metadata_list, scheduler_outputs, allow_async_output_proc) = self.scheduler[virtual_engine].schedule()
             print("step scheduler res seq_group_metadata_list", seq_group_metadata_list)
             print("step scheduler res scheduler_outputs", scheduler_outputs)
             print("step scheduler res allow_async_output_proc", allow_async_output_proc)
@@ -1378,8 +1377,7 @@ class LLMEngine:
         assert scheduler_outputs is not None
 
         if not scheduler_outputs.is_empty():
-            finished_requests_ids = self.scheduler[
-                virtual_engine].get_and_reset_finished_requests_ids()
+            finished_requests_ids = self.scheduler[virtual_engine].get_and_reset_finished_requests_ids()
 
             # Check if we have a cached last_output from the previous iteration.
             # For supporting PP this is probably the best way to pass the

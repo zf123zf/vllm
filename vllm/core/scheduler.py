@@ -993,52 +993,67 @@ class Scheduler:
         be swapped or preempted.
         """
         # Include running requests to the budget.
+        # 每次step都要重新初始化一个budget来管理本次调度的的tokens和seqs数量, 根据数量是否超过阈值，决定将本次
+        # seq_groups放入哪个队列。(一个seq_groups会包含多个seqs)
         budget = SchedulingBudget(
             token_budget=self.scheduler_config.max_num_batched_tokens,
             max_num_seqs=self.scheduler_config.max_num_seqs,
         )
         # Make sure we include num running seqs before scheduling prefill,
         # so that we don't schedule beyond max_num_seqs for prefill.
+        # 先统计正在执行推理的seq_groups中seq的数量
         for seq_group in self.running:
-            budget.add_num_seqs(seq_group.request_id,
-                                seq_group.get_max_num_running_seqs())
+            budget.add_num_seqs(seq_group.request_id, seq_group.get_max_num_running_seqs())
         curr_loras = set(
             seq_group.lora_int_id for seq_group in self.running
             if seq_group.lora_int_id > 0) if self.lora_enabled else None
-
+        
+        # 以下三个变量，类似于C++中的结构体。将多个变量合在一起，通过.属性访问各自保存处于不同活跃状态(wait,run,swap)的seq_groups具有的属性
         prefills = SchedulerPrefillOutputs.create_empty()
         running_scheduled = SchedulerRunningOutputs.create_empty()
         swapped_in = SchedulerSwappedInOutputs.create_empty()
 
         # If any requests are swapped, prioritized swapped requests.
-        if not self.swapped:
+        # 为什么要从swap开始判断？调度的任务是优化吞吐量，即保证处于running状态的seqs最多。running从wait和swap队列获得，首先积压的任务可能要比wait的优先级高，因为swap队列中的任务始终占据着系统资源，当running可添加时，应该首先处理swap
+        if not self.swapped:# 如果swapped队列为空
+            # 既然不能从swap向running转移，那就只能从wait队列拿任务了
+            # wait队列中的都是原始任务，第一步要预填充
+            # prefills是一个伪结构体：可以.出以下属性
+            #     seq_groups: List[SequenceGroup]
+            #     ignored_seq_groups: List[SequenceGroup]
+            #     num_lookahead_slots: int
             prefills = self._schedule_prefills(budget,
                                                curr_loras,
                                                enable_chunking=False)
 
-        if len(prefills.seq_groups
-               ) == 0 and self.scheduler_config.policy == "priority":
+        
+        if len(prefills.seq_groups) == 0 and self.scheduler_config.policy == "priority":
             self._schedule_priority_preemption(budget)
 
         # Don't schedule decodes if prefills are scheduled.
         # NOTE: If `_schedule_prefills` doesn't enable chunking, self.running
         # only contains decode requests, not chunked prefills.
-        if len(prefills.seq_groups) == 0:
-            running_scheduled = self._schedule_running(budget,
-                                                       curr_loras,
-                                                       enable_chunking=False)
 
+        # self.waiting空,或 self.swapped非空,都会导致prefills.seq_groups数量为0
+        # 这个判断的意思是,prefills.seq_groups==0,说明本次调度没有安排预填充任务,那么就安排解码任务，执行推理任务的seq_group都在running队列，因此需要对这个队列进行调度。
+        # 调度什么呢？
+        # 是看running队列中的seq_group是否可以继续做推理任务。因为vllm动态管理，最大限度优化吞吐量，会导致blocks资源紧张，上次推理生成的tokens的kv-cache需要GPU blocks去存储，导致资源消耗。那么这次准备推理时blocks数量不一定能够它完成
+        # 推理，所以要对running队列中每个seq_group进行检查，看是否可以进行做推理
+
+        if len(prefills.seq_groups) == 0:
+            running_scheduled = self._schedule_running(budget, curr_loras, enable_chunking=False)
             # If any sequence group is preempted, do not swap in any sequence
             # group. because it means there's no slot for new running requests.
-            if len(running_scheduled.preempted) + len(
-                    running_scheduled.swapped_out) == 0:
+            if len(running_scheduled.preempted) + len(running_scheduled.swapped_out) == 0:
                 swapped_in = self._schedule_swapped(budget, curr_loras)
 
-        assert (budget.num_batched_tokens <=
-                self.scheduler_config.max_num_batched_tokens)
+        # 最后一次判断本次推理的tokens和seqs数量是否超过阈值
+        assert (budget.num_batched_tokens <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_seqs <= self.scheduler_config.max_num_seqs
 
         # Update waiting requests.
+        # 这个类型被抢占的seq_group，打回原型，重新加入waiting队列。
+        # 幸运的是添加到了队列头部，当再次从waiting队列取数据时，会优先处理它
         self.waiting.extendleft(running_scheduled.preempted)
         # Update new running requests.
         if len(prefills.seq_groups) > 0:
@@ -1049,14 +1064,12 @@ class Scheduler:
         # print("_schedule_default self.running 2", self.running)
 
         if len(swapped_in.decode_seq_groups) > 0:
-            self.running.extend(
-                [s.seq_group for s in swapped_in.decode_seq_groups])
+            self.running.extend([s.seq_group for s in swapped_in.decode_seq_groups])
         print("_schedule_default self.running 3", self.running)
 
         # Update swapped requests.
         self.swapped.extend(running_scheduled.swapped_out)
-        preempted = (len(running_scheduled.preempted) +
-                     len(running_scheduled.swapped_out))
+        preempted = (len(running_scheduled.preempted) + len(running_scheduled.swapped_out))
 
         # There should be no prefill from running queue because this policy
         # doesn't allow chunked prefills.
@@ -1232,9 +1245,10 @@ class Scheduler:
 
         # Create input data structures.
         seq_group_metadata_list: List[SequenceGroupMetadata] = []
-        for i, scheduled_seq_group in enumerate(
-                scheduler_outputs.scheduled_seq_groups):
+        print("schedule scheduler_outputs.scheduled_seq_groups", scheduler_outputs.scheduled_seq_groups)
+        for i, scheduled_seq_group in enumerate(scheduler_outputs.scheduled_seq_groups):
             seq_group = scheduled_seq_group.seq_group
+            print("schedule seq_group", seq_group)
             token_chunk_size = scheduled_seq_group.token_chunk_size
             seq_group.maybe_set_first_scheduled_time(now)
 
@@ -1274,6 +1288,7 @@ class Scheduler:
 
             do_sample = True
             is_prompt = seq_group.is_prefill()
+            print("schedule seq_group is_prompt", is_prompt)
             # We should send the metadata to workers when the first prefill
             # is sent. Subsequent requests could be chunked prefill or decode.
             is_first_prefill = False

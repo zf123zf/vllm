@@ -303,6 +303,7 @@ class SequenceData(msgspec.Struct,
             self._num_computed_tokens, self.get_len())
         # If all tokens are computed, it means it is in decoding phase.
         if self.get_num_uncomputed_tokens() == 0:
+            print("update_num_computed_tokens self._stage", self._stage, "to SequenceStage.DECODE")
             self._stage = SequenceStage.DECODE
 
     def reset_state_for_recompute(self) -> None:
@@ -354,6 +355,7 @@ class SequenceData(msgspec.Struct,
     def __repr__(self) -> str:
         return (f"SequenceData("
                 f"prompt_token_ids={self._prompt_token_ids}, "
+                f"stage={self._stage}, "
                 f"output_token_ids={self.output_token_ids}, "
                 f"_output_token_ids={self._output_token_ids}, "
                 f"cumulative_logprob={self.cumulative_logprob}, "
@@ -840,6 +842,7 @@ class SequenceGroup:
     def update_num_computed_tokens(self, num_new_computed_tokens: int):
         """Update number of tokens computed so far."""
         for seq in self.seqs:
+            print("update_num_computed_tokens seq.is_finished()", seq.is_finished())
             if not seq.is_finished():
                 seq.data.update_num_computed_tokens(num_new_computed_tokens)
 

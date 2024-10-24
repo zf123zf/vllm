@@ -66,6 +66,9 @@ class CacheEngine:
         self.gpu_cache = self._allocate_kv_cache(
             self.num_gpu_blocks, self.device_config.device_type)
         self.cpu_cache = self._allocate_kv_cache(self.num_cpu_blocks, "cpu")
+        print("CacheEngine len(self.gpu_cache)", len(self.gpu_cache)) # 28 层
+        if len(self.gpu_cache) > 0:
+            print("CacheEngine self.gpu_cache[0].shape", self.gpu_cache[0].shape) # torch.Size([2, 156091, 16, 2, 128]) (2, num_blocks, block_size, num_kv_heads, head_size)
 
     def _allocate_kv_cache(
         self,
@@ -73,8 +76,10 @@ class CacheEngine:
         device: str,
     ) -> List[torch.Tensor]:
         """Allocates KV cache on the specified device."""
+        print("CacheEngine self.attn_backend", self.attn_backend)
         kv_cache_shape = self.attn_backend.get_kv_cache_shape(
             num_blocks, self.block_size, self.num_kv_heads, self.head_size)
+        print("CacheEngine kv_cache_shape", kv_cache_shape) # (2, num_blocks, block_size, num_kv_heads, head_size)
         pin_memory = is_pin_memory_available() if device == "cpu" else False
         kv_cache: List[torch.Tensor] = []
         for _ in range(self.num_attention_layers):
@@ -99,6 +104,7 @@ class CacheEngine:
                                           src_to_dst)
 
     def copy(self, src_to_dsts: torch.Tensor) -> None:
+        print("CacheEngine copy", src_to_dsts)
         self.attn_backend.copy_blocks(self.gpu_cache, src_to_dsts)
 
     @staticmethod

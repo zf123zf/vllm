@@ -223,7 +223,9 @@ class Worker(LocalOrDistributedWorkerBase):
 
         # Execute a forward pass with dummy inputs to profile the memory usage
         # of the model.
+        print("worker determine_num_available_blocks profile_run start")
         self.model_runner.profile_run()
+        print("worker determine_num_available_blocks profile_run end")
 
         # Calculate the number of blocks that can be allocated with the
         # profiled peak memory.
@@ -275,12 +277,13 @@ class Worker(LocalOrDistributedWorkerBase):
                         self.parallel_config, self.device_config)
             for _ in range(self.parallel_config.pipeline_parallel_size)
         ]
-        self.gpu_cache = [
+        self.gpu_cache = [ # pp * layers
             self.cache_engine[ve].gpu_cache
             for ve in range(self.parallel_config.pipeline_parallel_size)
         ]
 
     def _warm_up_model(self) -> None:
+        print("worker self.model_config.enforce_eager", self.model_config.enforce_eager, self.model_runner)
         if not self.model_config.enforce_eager:
             self.model_runner.capture_model(self.gpu_cache)
         # Reset the seed to ensure that the random state is not affected by

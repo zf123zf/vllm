@@ -171,7 +171,7 @@ def _initialize_model(
         scheduler_config: Optional[SchedulerConfig] = None) -> nn.Module:
     """Initialize a model with the given configurations."""
     model_class, _ = get_model_architecture(model_config)
-
+    print("model_loder model_class", model_class)
     return build_model(
         model_class,
         model_config.hf_config,
@@ -412,6 +412,7 @@ class DefaultModelLoader(BaseModelLoader):
                     # parameters onto device for processing and back off after.
                     with device_loading_context(module, target_device):
                         quant_method.process_weights_after_loading(module)
+        print("loader end load_model")
         return model.eval()
 
 

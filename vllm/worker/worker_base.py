@@ -254,7 +254,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                 execute_model_req.seq_group_metadata_list,
                 execute_model_req.virtual_engine,
                 execute_model_req.finished_requests_ids))
-
+        print("_get_driver_input_and_broadcast model_input", model_input)
         kwargs = extract_previous_hidden_states(execute_model_req)
 
         if self.do_metadata_broadcast:
@@ -278,6 +278,9 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         """
         Prepare the inputs to ModelRunner and workers.
         """
+        print("LocalOrDistributedWorkerBase 1", self.is_driver_worker)
+        print("LocalOrDistributedWorkerBase 2", execute_model_req)
+        print("LocalOrDistributedWorkerBase 3", self.do_metadata_broadcast)
         if self.is_driver_worker:
             if execute_model_req is None:
                 if self.do_metadata_broadcast:
@@ -299,7 +302,7 @@ class LocalOrDistributedWorkerBase(WorkerBase):
         """Executes at least one model step on the given sequences, unless no
         sequences are provided."""
         start_time = time.perf_counter()
-
+        print("LocalOrDistributedWorkerBase execute_model_req", execute_model_req)
         inputs = self.prepare_input(execute_model_req)
         if inputs is None:
             return None
@@ -325,6 +328,17 @@ class LocalOrDistributedWorkerBase(WorkerBase):
                     "model_execute_time", torch.tensor(0)).item()
         # LocalOrDistributedWorkerBase self.model_runner <vllm.worker.model_runner.ModelRunner object at 0x7f1ac96809d0>
         print("LocalOrDistributedWorkerBase self.model_runner", self.model_runner)
+        # print("LocalOrDistributedWorkerBase model_input", model_input)
+        
+        # l1, l2, l3_shape=0, 0, 0
+        # l1 = len(self.kv_cache)
+        # if l1 > 0:
+        #     l2=len(self.kv_cache[0])
+        #     if l2>0:
+        #         l3_shape=self.kv_cache[0][0].shape
+        # print("LocalOrDistributedWorkerBase kv_cache size", l1, l2, l3_shape) # 1 28 torch.Size([2, 156091, 16, 2, 128]) pp layers
+
+        print("LocalOrDistributedWorkerBase kv_cache before execute_model", worker_input.virtual_engine, self.kv_cache[0][0][0][0][0][0])
         output = self.model_runner.execute_model(
             model_input=model_input,
             kv_caches=self.kv_cache[worker_input.virtual_engine]
@@ -333,6 +347,10 @@ class LocalOrDistributedWorkerBase(WorkerBase):
             num_steps=num_steps,
             **kwargs,
         )
+        # print("LocalOrDistributedWorkerBase kv_cache after execute_model", worker_input.virtual_engine, self.kv_cache[0][0][0][3][2][0])
+        # print("LocalOrDistributedWorkerBase kv_cache after execute_model", worker_input.virtual_engine, self.kv_cache[0][0][0][3][3][0])
+        # print("LocalOrDistributedWorkerBase kv_cache after execute_model", worker_input.virtual_engine, self.kv_cache[0][0][0][3][4][0])
+        # print("LocalOrDistributedWorkerBase kv_cache after execute_model", worker_input.virtual_engine, self.kv_cache[0][0][0][3][5][0])
         print("LocalOrDistributedWorkerBase output", output)
 
         model_execute_time = time.perf_counter() - start_time

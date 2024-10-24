@@ -425,7 +425,7 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
 
         self.quant_config = quant_config
         self.model = Qwen2Model(config, cache_config, quant_config)
-
+        print("Qwen2ForCausalLM 1")
         if config.tie_word_embeddings:
             self.lm_head = self.model.embed_tokens
         else:
@@ -449,8 +449,14 @@ class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
         print("Qwen2ForCausalLM step forward----") # 1次
         print("Qwen2ForCausalLM-forward input_ids", input_ids.shape) # 256
         print("Qwen2ForCausalLM-forward positions", positions.shape)
-        # print("Qwen2ForCausalLM-forward kv_caches", kv_caches)
-        # print("Qwen2ForCausalLM-forward attn_metadata", attn_metadata)
+        print("Qwen2ForCausalLM-forward kv_caches[0].shape", kv_caches[0].shape)
+
+        # try:
+            # print("Qwen2ForCausalLM-forward kv_caches[0].shape", kv_caches[0][0][3][2][0])
+            # print("Qwen2ForCausalLM-forward kv_caches[0].shape", kv_caches[0][0][3][3][0])
+            # print("Qwen2ForCausalLM-forward kv_caches[0].shape", kv_caches[0][0][3][4][0])
+        # except Exception:
+        #     pass
         print("Qwen2ForCausalLM-forward intermediate_tensors", intermediate_tensors)
         # print("Qwen2ForCausalLM-forward self.model", self.model)
         hidden_states = self.model(input_ids, positions, kv_caches,
