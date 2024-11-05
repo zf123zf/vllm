@@ -1065,7 +1065,7 @@ class Scheduler:
 
         if len(swapped_in.decode_seq_groups) > 0:
             self.running.extend([s.seq_group for s in swapped_in.decode_seq_groups])
-        print("_schedule_default self.running 3", self.running)
+        # print("_schedule_default self.running 3", self.running)
 
         # Update swapped requests.
         self.swapped.extend(running_scheduled.swapped_out)

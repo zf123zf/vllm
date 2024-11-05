@@ -1579,7 +1579,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         """
         model_input = self._prepare_model_input_tensors(
             seq_group_metadata_list, finished_requests_ids)
-        print("modelrunner prepare_model_input model_input", model_input)
+        # print("modelrunner prepare_model_input model_input", model_input)
         if get_pp_group().is_last_rank:
             # Sampling metadata is only required for the final pp group
             generators = self.get_generators(finished_requests_ids)
@@ -1630,8 +1630,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         # TODO(andoorve): We can remove this once all
         # virtual engines share the same kv cache.
         virtual_engine = model_input.virtual_engine
-        print("ModelRunner prefill_meta", type(prefill_meta))
-        print("ModelRunner prefill_meta1", prefill_meta)
+        # print("ModelRunner prefill_meta", type(prefill_meta))
+        # print("ModelRunner prefill_meta1", prefill_meta)
         if decode_meta:
             print("ModelRunner decode_meta.use_cuda_graph", decode_meta.use_cuda_graph)
         if prefill_meta is None and decode_meta.use_cuda_graph:
@@ -1675,8 +1675,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                 **MultiModalInputs.as_kwargs(multi_modal_kwargs,
                                              device=self.device),
                 **seqlen_agnostic_kwargs)
-            print("ModelRunner after model_executable prefill_metadata", model_input.attn_metadata.prefill_metadata)
-            print("ModelRunner after model_executable decode_metadata", model_input.attn_metadata.decode_metadata)
+            # print("ModelRunner after model_executable prefill_metadata", model_input.attn_metadata.prefill_metadata)
+            # print("ModelRunner after model_executable decode_metadata", model_input.attn_metadata.decode_metadata)
 
         if (self.observability_config is not None
                 and self.observability_config.collect_model_forward_time):
@@ -1710,7 +1710,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
         print("ModelRunner hidden_or_intermediate_states", hidden_or_intermediate_states.shape) # seq_len * 1536
         print("ModelRunner hidden_or_intermediate_states[0]", hidden_or_intermediate_states[0])
         # print("ModelRunner model_input.sampling_metadata", model_input.sampling_metadata)
-        print("ModelRunner self.model", self.model)
+        # print("ModelRunner self.model", self.model)
         logits = self.model.compute_logits(hidden_or_intermediate_states,
                                            model_input.sampling_metadata)
         print("ModelRunner logits shape", logits.shape) # torch.Size([1, 151936])
@@ -1883,11 +1883,11 @@ class CUDAGraphRunner:
         del kv_caches
         print("CUDAGraphRunner step forward----")
         print("CUDAGraphRunner self.attn_state", self.attn_state)
-        print("CUDAGraphRunner self.model", self.model)
+        # print("CUDAGraphRunner self.model", self.model)
         print("CUDAGraphRunner self.graph", self.graph)
         print("CUDAGraphRunner input_ids", input_ids)
         print("CUDAGraphRunner positions", positions)
-        print("CUDAGraphRunner attn_metadata", attn_metadata)
+        # print("CUDAGraphRunner attn_metadata", attn_metadata)
         # Copy the input tensors to the input buffers.
         self.input_buffers["input_ids"].copy_(input_ids, non_blocking=True)
         self.input_buffers["positions"].copy_(positions, non_blocking=True)

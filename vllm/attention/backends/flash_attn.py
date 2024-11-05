@@ -318,7 +318,7 @@ class FlashAttentionMetadataBuilder(
         3. slot mapping.
         """
         is_prompt = inter_data.is_prompt
-        print("_add_seq_group is_prompt", is_prompt)
+        # print("_add_seq_group is_prompt", is_prompt)
         block_tables = inter_data.block_tables
 
         for (seq_id, token_len, seq_len, curr_seq_len, query_len, context_len,
@@ -399,19 +399,19 @@ class FlashAttentionMetadataBuilder(
                                  -1 if cuda graph is not used.
             batch_size: The maybe padded batch size.
         """
-        print("FlashAttentionMetadataBuilder seq_lens", seq_lens)
-        print("FlashAttentionMetadataBuilder query_lens", query_lens)
-        print("FlashAttentionMetadataBuilder cuda_graph_pad_size", cuda_graph_pad_size)
-        print("FlashAttentionMetadataBuilder batch_size", batch_size)
+        # print("FlashAttentionMetadataBuilder seq_lens", seq_lens)
+        # print("FlashAttentionMetadataBuilder query_lens", query_lens)
+        # print("FlashAttentionMetadataBuilder cuda_graph_pad_size", cuda_graph_pad_size)
+        # print("FlashAttentionMetadataBuilder batch_size", batch_size)
 
-        print("FlashAttentionMetadataBuilder self.num_prefills", self.num_prefills)
+        # print("FlashAttentionMetadataBuilder self.num_prefills", self.num_prefills)
         prefix_cache_hit = any([
             inter_data.prefix_cache_hit
             for inter_data in self.input_builder.inter_data_list
         ])
-        print("FlashAttentionMetadataBuilder input_builder.inter_data_list", self.input_builder.inter_data_list)
+        # print("FlashAttentionMetadataBuilder input_builder.inter_data_list", self.input_builder.inter_data_list)
         for inter_data in self.input_builder.inter_data_list:
-            print("FlashAttentionMetadataBuilder input_builder.inter_data_list inter_data", inter_data)
+            # print("FlashAttentionMetadataBuilder input_builder.inter_data_list inter_data", inter_data)
             self._add_seq_group(inter_data,
                                 self.input_builder.chunked_prefill_enabled,
                                 prefix_cache_hit)
@@ -643,12 +643,12 @@ def unified_flash_attention(
     key = key.view(-1, num_kv_heads, head_size)
     value = value.view(-1, num_kv_heads, head_size)
 
-    print("unified_flash_attention kv_cache.numel()", kv_cache.numel())
+    # print("unified_flash_attention kv_cache.numel()", kv_cache.numel())
     if kv_cache.numel() > 0:
         key_cache = kv_cache[0]
         value_cache = kv_cache[1]
 
-        print("unified_flash_attention torch.ops._C_cache_ops.reshape_and_cache_flash")
+        # print("unified_flash_attention torch.ops._C_cache_ops.reshape_and_cache_flash")
         # Reshape the input keys and values and store them in the cache.
         # If kv_cache is not provided, the new key and value tensors are
         # not cached. This happens during the initial memory profiling run.
@@ -687,16 +687,16 @@ def unified_flash_attention(
 
     prefill_output: Optional[torch.Tensor] = None
     decode_output: Optional[torch.Tensor] = None
-    print("unified_flash_attention 1")
+    # print("unified_flash_attention 1")
     if prefill_meta := attn_metadata.prefill_metadata:
         # Prompt run.
-        print("unified_flash_attention prefill_meta.block_tables", prefill_meta.block_tables)
+        # print("unified_flash_attention prefill_meta.block_tables", prefill_meta.block_tables)
         if (kv_cache.numel() == 0 or prefill_meta.block_tables is None
                 or prefill_meta.block_tables.numel() == 0):
             # normal attention
             # When block_tables are not filled, it means q and k are the
             # prompt, and they have the same length.
-            print("unified_flash_attention prefill_output1")
+            # print("unified_flash_attention prefill_output1")
             prefill_output = flash_attn_varlen_func(
                 q=query,
                 k=key,
@@ -711,9 +711,9 @@ def unified_flash_attention(
                 alibi_slopes=alibi_slopes,
                 softcap=logits_soft_cap,
             )
-            print("unified_flash_attention prefill_output1 res", prefill_output.shape) # [4096, 12, 128]
+            # print("unified_flash_attention prefill_output1 res", prefill_output.shape) # [4096, 12, 128]
         else:
-            print("unified_flash_attention prefill_output2")
+            # print("unified_flash_attention prefill_output2")
             assert prefill_meta.seq_lens is not None
             max_seq_len = max(prefill_meta.seq_lens)
             prefill_output = flash_attn_varlen_func(  # noqa
@@ -730,10 +730,10 @@ def unified_flash_attention(
                 block_table=prefill_meta.block_tables,
                 softcap=logits_soft_cap,
             )
-            print("unified_flash_attention prefill_output2 res", prefill_output.shape)
-    print("unified_flash_attention 2")
+            # print("unified_flash_attention prefill_output2 res", prefill_output.shape)
+    # print("unified_flash_attention 2")
     if decode_meta := attn_metadata.decode_metadata:
-        print("unified_flash_attention 3")
+        # print("unified_flash_attention 3")
         # Decoding run.
         _, num_head, head_dim = decode_query.shape
         decode_query = decode_query.reshape(-1, decode_meta.decode_query_len,
@@ -750,13 +750,13 @@ def unified_flash_attention(
             softcap=logits_soft_cap,
         ).squeeze(1)
 
-    print("unified_flash_attention 4")
+    # print("unified_flash_attention 4")
     if prefill_output is None:
-        print("unified_flash_attention 5")
+        # print("unified_flash_attention 5")
         assert decode_output is not None
         return decode_output.view(num_decode_tokens, hidden_size)
     if decode_output is None:
-        print("unified_flash_attention 6")
+        # print("unified_flash_attention 6")
         assert prefill_output is not None
         return prefill_output.view(num_prefill_tokens, hidden_size)
 

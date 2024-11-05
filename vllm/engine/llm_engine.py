@@ -1127,7 +1127,7 @@ class LLMEngine:
                 print("_process_model_outputs self.output_processor 1.5", seq_group)
                 print("_process_model_outputs self.output_processor 1.5 output", output)
                 self.output_processor.process_prompt_logprob(seq_group, output)
-                print("_process_model_outputs self.output_processor 2", seq_group)
+                # print("_process_model_outputs self.output_processor 2", seq_group)
                 if seq_group_meta.do_sample:
                     self.output_processor.process_outputs(
                         seq_group, output, is_async)

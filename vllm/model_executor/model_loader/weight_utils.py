@@ -405,6 +405,7 @@ def safetensors_weights_iterator(
     ):
         with safe_open(st_file, framework="pt") as f:
             for name in f.keys():  # noqa: SIM118
+                print("safetensors_weights_iterator name", name)
                 param = f.get_tensor(name)
                 yield name, param
 

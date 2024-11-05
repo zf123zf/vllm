@@ -277,12 +277,12 @@ def detokenize_incrementally(
             tokens.
     """
     # print("detokenize_incrementally req tokenizer", tokenizer)
-    print("detokenize_incrementally req all_input_ids", len(all_input_ids), all_input_ids)
-    print("detokenize_incrementally req prev_tokens", prev_tokens)
-    print("detokenize_incrementally req prefix_offset", prefix_offset)
-    print("detokenize_incrementally req read_offset", read_offset)
-    print("detokenize_incrementally req skip_special_tokens", skip_special_tokens)
-    print("detokenize_incrementally req spaces_between_special_tokens", spaces_between_special_tokens)
+    # print("detokenize_incrementally req all_input_ids", len(all_input_ids), all_input_ids)
+    # print("detokenize_incrementally req prev_tokens", prev_tokens)
+    # print("detokenize_incrementally req prefix_offset", prefix_offset)
+    # print("detokenize_incrementally req read_offset", read_offset)
+    # print("detokenize_incrementally req skip_special_tokens", skip_special_tokens)
+    # print("detokenize_incrementally req spaces_between_special_tokens", spaces_between_special_tokens)
     new_token_id = all_input_ids[-1]
     # This is the first iteration for this sequence
     is_first_iter = prev_tokens is None

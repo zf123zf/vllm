@@ -335,6 +335,9 @@ class DefaultModelLoader(BaseModelLoader):
         """Get an iterator for the model weights based on the load format."""
         hf_folder, hf_weights_files, use_safetensors = self._prepare_weights(
             source.model_or_path, source.revision, source.fall_back_to_pt)
+        print("_get_weights_iterator self.load_config", self.load_config)
+        print("_get_weights_iterator _prepare_weights", hf_folder, hf_weights_files, use_safetensors)
+        print("_get_weights_iterator source.prefix", source.prefix)
         if self.load_config.load_format == LoadFormat.NPCACHE:
             # Currently np_cache only support *.bin checkpoints
             assert use_safetensors is False

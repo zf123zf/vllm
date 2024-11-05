@@ -357,6 +357,7 @@ class Qwen2Model(nn.Module):
                     continue
                 param = params_dict[name]
                 weight_loader = param.weight_loader
+                # print("load_weights weight_loader", weight_loader) # MergedColumnParallelLinear QKVParallelLinear
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
@@ -376,6 +377,28 @@ class Qwen2Model(nn.Module):
 
 
 class Qwen2ForCausalLM(nn.Module, SupportsLoRA, SupportsPP):
+    # Qwen2Model(
+    #     (embed_tokens): VocabParallelEmbedding(num_embeddings=151936, embedding_dim=1536, org_vocab_size=151936, num_embeddings_padded=151936, tp_size=1)
+    #     (layers): ModuleList(
+    #         (0-27): 28 x Qwen2DecoderLayer(
+    #             (self_attn): Qwen2Attention(
+    #                 (qkv_proj): QKVParallelLinear(in_features=1536, output_features=2048, bias=True, tp_size=1, gather_output=False)
+    #                 (o_proj): RowParallelLinear(input_features=1536, output_features=1536, bias=False, tp_size=1, reduce_results=True)
+    #                 (rotary_emb): RotaryEmbedding(head_size=128, rotary_dim=128, max_position_embeddings=4096, base=10000.0, is_neox_style=True)
+    #                 (attn): Attention(head_size=128, num_heads=12, num_kv_heads=2, scale=0.08838834764831845, backend=FlashAttentionImpl)
+    #             )
+    #             (mlp): Qwen2MLP(
+    #                 (gate_up_proj): MergedColumnParallelLinear(in_features=1536, output_features=17920, bias=False, tp_size=1, gather_output=False)
+    #                 (down_proj): RowParallelLinear(input_features=8960, output_features=1536, bias=False, tp_size=1, reduce_results=True)
+    #                 (act_fn): SiluAndMul()
+    #             )
+    #             (input_layernorm): RMSNorm(hidden_size=1536, eps=1e-06)
+    #             (post_attention_layernorm): RMSNorm(hidden_size=1536, eps=1e-06)
+    #         )
+    #     )
+    #     (norm): RMSNorm(hidden_size=1536, eps=1e-06)
+    # )
+
     packed_modules_mapping = {
         "qkv_proj": [
             "q_proj",
